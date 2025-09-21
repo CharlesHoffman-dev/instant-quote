@@ -231,7 +231,7 @@ export default function InstantQuoteSchedule() {
     function postHeight() {
       try {
         const h = document.documentElement.scrollHeight || document.body.scrollHeight;
-        (window as any).parent?.postMessage({ type: "resize-quote-iframe", height: h }, "*");
+        window.parent?.postMessage({ type: "resize-quote-iframe", height: h }, "*");
       } catch {}
     }
     postHeight();
