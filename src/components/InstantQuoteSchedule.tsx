@@ -243,9 +243,6 @@ export default function InstantQuoteSchedule() {
   return (
     <div className="max-w-6xl mx-auto p-4 sm:p-6 bg-[#f2f3f8]">
       <header className="mb-6 sm:mb-8 text-center">
-        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">
-          Instant Exterior Cleaning Quote
-        </h1>
         <p className="text-muted-foreground mt-2">
           Select services to see your price. Book instantly.
         </p>
@@ -467,10 +464,6 @@ export default function InstantQuoteSchedule() {
           </div>
         </div>
       )}
-
-      <footer className="text-center text-xs text-muted-foreground mt-8">
-        © {new Date().getFullYear()} Guardian Pressure Washing • San Antonio, TX
-      </footer>
     </div>
   );
 }
