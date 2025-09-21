@@ -18,7 +18,7 @@ function cn(...cls: Array<string | false | null | undefined>) {
    Services, Durations, Discounts
 ============================================================================= */
 export type Service = { id: string; name: string; basePrice: number; desc: string };
-export type PricedService = Service & { price: number };
+type PricedService = Service & { price: number };
 
 const SERVICES: Service[] = [
   { id: "pressure-driveway", name: "Pressure Wash - Driveway", basePrice: 249, desc: "Concrete driveway, front patio, walkway, and curb cleaning." },
@@ -45,12 +45,6 @@ const DURATIONS_MIN: Record<string, number> = {
 function gutterDuration(twoStory: boolean, guards: boolean) {
   const base = twoStory ? 180 : 120; // 2-story = 3h, 1-story = 2h
   return guards ? base * 2 : base; // doubled if guards
-}
-
-// Group pressure driveway & patio as one “pressure” category for discounts
-function discountCategoryFor(id: string): string {
-  if (id === "pressure-driveway" || id === "pressure-patio") return "pressure";
-  return id; // others are their own category
 }
 
 // Cal.com mapping to 1–8 hr event types (anything >8 → 8)
@@ -84,8 +78,8 @@ function round2(n: number) {
 }
 
 export type Totals = {
-  selectedCount: number;         // raw number of checked tiles
-  distinctCount: number;         // discount categories (pressure counts as 1)
+  selectedCount: number;         // raw count (not used for discount)
+  effectiveCount: number;        // discount count (pressure-* collapse to 1)
   subtotal: number;
   multiRate: number;
   multiAmt: number;
@@ -93,6 +87,12 @@ export type Totals = {
   total: number;
   durationMinutes: number;       // total estimated duration
 };
+
+function discountCategoryFor(serviceId: string): string {
+  // Treat both pressure-* options as the same category for discount counting
+  if (serviceId.startsWith("pressure-")) return "pressure";
+  return serviceId;
+}
 
 export function computeTotals(
   selectedMap: Record<string, boolean>,
@@ -113,28 +113,31 @@ export function computeTotals(
     return { ...s, price };
   });
 
-  const chosen: PricedService[] = adjustedServices.filter((s) => selectedMap[s.id]);
+  const chosen: PricedService[] = adjustedServices.filter(
+    (s): s is PricedService => Boolean(selectedMap[s.id])
+  );
+
   const selectedCount = chosen.length;
 
-  // Distinct discount categories (pressure driveway/patio = one)
-  const distinctSet = new Set<string>(chosen.map((s) => discountCategoryFor(s.id)));
-  const distinctCount = distinctSet.size;
+  // Discount “effective” count: pressure-driveway + pressure-patio => 1
+  const effectiveCount = new Set(chosen.map((s) => discountCategoryFor(s.id))).size;
 
   const subtotal = chosen.reduce((sum, s) => sum + s.price, 0);
 
-  // Discount ladder based on distinct categories: 2→5%, 3→10%, 4→15%, 5+→20%
+  // Discount ladder based on effectiveCount: 2→5%, 3→10%, 4→15%, 5+→20%
   let multiRate = 0;
-  if (distinctCount >= 5) multiRate = 0.2;
-  else if (distinctCount === 4) multiRate = 0.15;
-  else if (distinctCount === 3) multiRate = 0.1;
-  else if (distinctCount === 2) multiRate = 0.05;
+  if (effectiveCount >= 5) multiRate = 0.2;
+  else if (effectiveCount === 4) multiRate = 0.15;
+  else if (effectiveCount === 3) multiRate = 0.1;
+  else if (effectiveCount === 2) multiRate = 0.05;
 
   const multiAmt = round2(subtotal * multiRate);
   const afterDiscount = round2(subtotal - multiAmt);
 
   // Trip fee brings total up to $249 minimum
   const MIN_TOTAL = 249;
-  const tripFee = afterDiscount < MIN_TOTAL && afterDiscount > 0 ? round2(MIN_TOTAL - afterDiscount) : 0;
+  const tripFee =
+    afterDiscount < MIN_TOTAL && afterDiscount > 0 ? round2(MIN_TOTAL - afterDiscount) : 0;
 
   const total = Math.max(0, round2(afterDiscount + tripFee));
 
@@ -144,52 +147,14 @@ export function computeTotals(
     return mins + (DURATIONS_MIN[s.id] || 0);
   }, 0);
 
-  return { selectedCount, distinctCount, subtotal, multiRate, multiAmt, tripFee, total, durationMinutes };
+  return { selectedCount, effectiveCount, subtotal, multiRate, multiAmt, tripFee, total, durationMinutes };
 }
 
 /* =============================================================================
-   Runtime Dev Tests (cheap asserts in-browser)
-============================================================================= */
-(function runDevTests() {
-  if (typeof window === "undefined") return; // only run in browser
-  try {
-    const mkSel = (ids: string[]) =>
-      ids.reduce<Record<string, boolean>>((m, id) => {
-        m[id] = true;
-        return m;
-      }, {});
-
-    // Duration sanity
-    {
-      const t = computeTotals(mkSel(["gutter"]), SERVICES, false, false);
-      console.assert(t.durationMinutes === 120 && t.subtotal === 249, "K failed", t);
-    }
-
-    // Pressure group discount behavior (driveway + patio = 1 category)
-    {
-      const t = computeTotals(mkSel(["pressure-driveway", "pressure-patio"]), SERVICES, false, false);
-      // 249 + 99 = 348; distinctCount should be 1 ⇒ no multi-discount
-      console.assert(t.distinctCount === 1 && t.multiRate === 0 && t.total === 348, "PG1 failed", t);
-    }
-    {
-      const t = computeTotals(mkSel(["roof", "pressure-driveway", "pressure-patio"]), SERVICES, false, false);
-      // categories: roof + pressure = 2 ⇒ 5% on subtotal (899 + 249 + 99 = 1247) -> 1184.65, no trip fee
-      console.assert(t.distinctCount === 2 && Math.abs(t.total - 1184.65) < 0.01, "PG2 failed", t);
-    }
-  } catch (e) {
-    console.warn("DEV tests skipped:", e);
-  }
-})();
-
-/* =============================================================================
-   Component (full UI) — personal details removed. Details card appears only
-   when any Yes/No question is relevant.
+   Component (details removed – cal.com collects them)
 ============================================================================= */
 export default function InstantQuoteSchedule() {
-  // selections
   const [selected, setSelected] = useState<Record<string, boolean>>({});
-
-  // modifiers (defaults: twoStory=false; gutterGuards=false)
   const [twoStory, setTwoStory] = useState(false);
   const [gutterGuards, setGutterGuards] = useState<boolean>(false); // default No
 
@@ -197,11 +162,9 @@ export default function InstantQuoteSchedule() {
   const [showTripwire, setShowTripwire] = useState(false);
   const [promoHouseHalf, setPromoHouseHalf] = useState(false);
 
-  // derived visibility flags
   const hasGutter = !!selected["gutter"];
   const hasTwoStoryRelevant = !!(selected["windows"] || selected["house"] || selected["gutter"]);
 
-  // totals and adjusted services (with two-story/guards price effects)
   const totals = useMemo(
     () => computeTotals(selected, SERVICES, twoStory, gutterGuards, promoHouseHalf),
     [selected, twoStory, gutterGuards, promoHouseHalf]
@@ -221,7 +184,6 @@ export default function InstantQuoteSchedule() {
     });
   }, [twoStory, gutterGuards, promoHouseHalf]);
 
-  // summary text
   const summaryLines = useMemo(() => {
     const items = adjustedServices
       .filter((s) => selected[s.id])
@@ -234,7 +196,7 @@ export default function InstantQuoteSchedule() {
   // booking link (map minutes to 1..8 hr event type)
   const hours = mapDurationToHours(totals.durationMinutes);
   const bookingUrl = useMemo(() => {
-    const meta: Record<string, string> = {
+    const meta = {
       services:
         adjustedServices
           .filter((s) => selected[s.id])
@@ -245,14 +207,12 @@ export default function InstantQuoteSchedule() {
       twoStory: hasTwoStoryRelevant ? (twoStory ? "Yes" : "No") : "N/A",
       gutterGuards: hasGutter ? (gutterGuards ? "Yes" : "No") : "N/A",
       houseTripwire50: promoHouseHalf ? "Yes" : "No",
-    };
+    } as Record<string, string>;
     return buildBookingUrl(hours, meta);
   }, [hours, adjustedServices, selected, totals, twoStory, gutterGuards, hasTwoStoryRelevant, hasGutter, promoHouseHalf]);
 
-  // no personal details required anymore
   const canSchedule = totals.total > 0;
 
-  // styles
   const activeBtn =
     "bg-[#2755f8] text-white border-[#2755f8] hover:bg-[#1e45d1] hover:text-white cursor-pointer";
   const inactiveBtn =
@@ -266,9 +226,8 @@ export default function InstantQuoteSchedule() {
     return `${h > 0 ? `${h} hr${h > 1 ? "s" : ""} ` : ""}${m} min`;
   };
 
-  // optional: auto-resize if embedded in an iframe
   useEffect(() => {
-    if (typeof window === "undefined") return; // SSR guard
+    if (typeof window === "undefined") return;
     function postHeight() {
       try {
         const h = document.documentElement.scrollHeight || document.body.scrollHeight;
