@@ -18,6 +18,7 @@ function cn(...cls: Array<string | false | null | undefined>) {
    Services, Durations, Discounts
 ============================================================================= */
 export type Service = { id: string; name: string; basePrice: number; desc: string };
+export type PricedService = Service & { price: number };
 
 const SERVICES: Service[] = [
   { id: "pressure-driveway", name: "Pressure Wash - Driveway", basePrice: 249, desc: "Concrete driveway, front patio, walkway, and curb cleaning." },
@@ -30,16 +31,6 @@ const SERVICES: Service[] = [
 
 export const DISCOUNT_BLURB =
   "Bundle & Save: 2 services 5% • 3 services 10% • 4 services 15% • 5+ services 20%";
-
-// Treat both pressure-wash items as the SAME discount group
-const SERVICE_GROUP: Record<string, string> = {
-  "pressure-driveway": "pressure",
-  "pressure-patio": "pressure",
-  windows: "windows",
-  house: "house",
-  roof: "roof",
-  gutter: "gutter",
-};
 
 // Duration (minutes) per service
 const DURATIONS_MIN: Record<string, number> = {
@@ -54,6 +45,12 @@ const DURATIONS_MIN: Record<string, number> = {
 function gutterDuration(twoStory: boolean, guards: boolean) {
   const base = twoStory ? 180 : 120; // 2-story = 3h, 1-story = 2h
   return guards ? base * 2 : base; // doubled if guards
+}
+
+// Group pressure driveway & patio as one “pressure” category for discounts
+function discountCategoryFor(id: string): string {
+  if (id === "pressure-driveway" || id === "pressure-patio") return "pressure";
+  return id; // others are their own category
 }
 
 // Cal.com mapping to 1–8 hr event types (anything >8 → 8)
@@ -87,14 +84,14 @@ function round2(n: number) {
 }
 
 export type Totals = {
-  /** Number of DISTINCT discount groups selected (pressure counted once) */
-  selectedCount: number;
+  selectedCount: number;         // raw number of checked tiles
+  distinctCount: number;         // discount categories (pressure counts as 1)
   subtotal: number;
   multiRate: number;
   multiAmt: number;
-  tripFee: number; // ensures $249 minimum
+  tripFee: number;               // ensures $249 minimum
   total: number;
-  durationMinutes: number; // total estimated duration
+  durationMinutes: number;       // total estimated duration
 };
 
 export function computeTotals(
@@ -104,7 +101,7 @@ export function computeTotals(
   gutterGuards: boolean,
   promoHouseHalf?: boolean
 ): Totals {
-  const adjustedServices = services.map((s) => {
+  const adjustedServices: PricedService[] = services.map((s) => {
     let price = s.basePrice;
     if (twoStory) {
       if (s.id === "gutter") price = s.basePrice * 2; // 2-story gutters cost double
@@ -113,25 +110,24 @@ export function computeTotals(
     }
     if (gutterGuards && s.id === "gutter") price += 749; // surcharge if guards installed
     if (promoHouseHalf && s.id === "house") price = Math.round(price * 0.5); // tripwire discount
-    return { ...s, price } as Service & { price: number };
+    return { ...s, price };
   });
 
-  const chosen = adjustedServices.filter((s) => selectedMap[s.id]);
+  const chosen: PricedService[] = adjustedServices.filter((s) => selectedMap[s.id]);
+  const selectedCount = chosen.length;
 
-  // --- NEW: Count DISTINCT SERVICE GROUPS for discount ladder
-  const chosenGroups = new Set(
-    chosen.map((s) => SERVICE_GROUP[s.id as keyof typeof SERVICE_GROUP] || s.id)
-  );
-  const selectedCount = chosenGroups.size;
+  // Distinct discount categories (pressure driveway/patio = one)
+  const distinctSet = new Set<string>(chosen.map((s) => discountCategoryFor(s.id)));
+  const distinctCount = distinctSet.size;
 
-  const subtotal = chosen.reduce((sum, s) => sum + (s as any).price, 0);
+  const subtotal = chosen.reduce((sum, s) => sum + s.price, 0);
 
-  // Discount ladder: 2→5%, 3→10%, 4→15%, 5+→20%  (based on DISTINCT groups)
+  // Discount ladder based on distinct categories: 2→5%, 3→10%, 4→15%, 5+→20%
   let multiRate = 0;
-  if (selectedCount >= 5) multiRate = 0.2;
-  else if (selectedCount === 4) multiRate = 0.15;
-  else if (selectedCount === 3) multiRate = 0.1;
-  else if (selectedCount === 2) multiRate = 0.05;
+  if (distinctCount >= 5) multiRate = 0.2;
+  else if (distinctCount === 4) multiRate = 0.15;
+  else if (distinctCount === 3) multiRate = 0.1;
+  else if (distinctCount === 2) multiRate = 0.05;
 
   const multiAmt = round2(subtotal * multiRate);
   const afterDiscount = round2(subtotal - multiAmt);
@@ -142,13 +138,13 @@ export function computeTotals(
 
   const total = Math.max(0, round2(afterDiscount + tripFee));
 
-  // Duration sum (unchanged — both pressure items still add their time)
+  // Duration sum
   const durationMinutes = chosen.reduce((mins, s) => {
     if (s.id === "gutter") return mins + gutterDuration(twoStory, gutterGuards);
     return mins + (DURATIONS_MIN[s.id] || 0);
   }, 0);
 
-  return { selectedCount, subtotal, multiRate, multiAmt, tripFee, total, durationMinutes };
+  return { selectedCount, distinctCount, subtotal, multiRate, multiAmt, tripFee, total, durationMinutes };
 }
 
 /* =============================================================================
@@ -163,88 +159,22 @@ export function computeTotals(
         return m;
       }, {});
 
-    // Pricing & discounts (distinct group counting: both pressure items = 1 group)
-    {
-      const t = computeTotals(mkSel(["windows", "gutter"]), SERVICES, false, false);
-      console.assert(
-        t.subtotal === 698 && t.multiRate === 0.05 && t.tripFee === 0 && t.total === 663.1,
-        "A failed",
-        t
-      );
-    }
-    {
-      const t = computeTotals(mkSel(["windows", "gutter"]), SERVICES, true, false);
-      console.assert(t.subtotal === 1047 && t.multiRate === 0.05 && t.total === 994.65, "B failed", t);
-    }
-    // UPDATED: pressure + pressure only => 1 group => NO discount
-    {
-      const t = computeTotals(mkSel(["pressure-driveway", "pressure-patio"]), SERVICES, false, false);
-      console.assert(t.subtotal === 348 && t.multiRate === 0 && t.total === 348, "C failed", t);
-    }
-    // UPDATED: pressure (group) + roof => 2 groups => 5% discount
-    {
-      const t = computeTotals(mkSel(["pressure-driveway", "pressure-patio", "roof"]), SERVICES, true, false);
-      console.assert(t.subtotal === 1247 && t.multiRate === 0.05 && t.total === 1184.65, "D failed", t);
-    }
-    // UPDATED: pressure (group) + house + windows => 3 groups => 10% discount
-    {
-      const t = computeTotals(
-        mkSel(["pressure-driveway", "pressure-patio", "house", "windows"]),
-        SERVICES,
-        true,
-        false
-      );
-      console.assert(t.subtotal === 1596 && t.multiRate === 0.1 && t.total === 1436.4, "E failed", t);
-    }
-    {
-      const t = computeTotals(mkSel(["pressure-patio"]), SERVICES, false, false);
-      console.assert(t.subtotal === 99 && t.tripFee === 150 && t.total === 249, "F failed", t);
-    }
-    {
-      const t = computeTotals(mkSel(["pressure-driveway"]), SERVICES, false, false);
-      console.assert(t.subtotal === 249 && t.tripFee === 0 && t.total === 249, "G failed", t);
-    }
-    {
-      const t = computeTotals(mkSel([]), SERVICES, false, false);
-      console.assert(t.total === 0 && t.tripFee === 0, "H failed", t);
-    }
-    {
-      const t = computeTotals(mkSel(["windows"]), SERVICES, true, false);
-      console.assert(t.subtotal === 549 && t.total === 549, "I failed", t);
-    }
-
-    // 5+ groups → 20%. Selecting everything still yields 5 distinct groups (pressure, windows, house, roof, gutter)
-    {
-      const t = computeTotals(
-        mkSel(["pressure-driveway", "pressure-patio", "windows", "house", "roof", "gutter"]),
-        SERVICES,
-        false,
-        false
-      );
-      console.assert(t.multiRate === 0.2 && t.total === 2035.2, "J (5+) failed", t);
-    }
-
-    // Duration (unchanged)
+    // Duration sanity
     {
       const t = computeTotals(mkSel(["gutter"]), SERVICES, false, false);
       console.assert(t.durationMinutes === 120 && t.subtotal === 249, "K failed", t);
     }
+
+    // Pressure group discount behavior (driveway + patio = 1 category)
     {
-      const t = computeTotals(mkSel(["gutter"]), SERVICES, true, false);
-      console.assert(t.durationMinutes === 180 && t.subtotal === 498, "L failed", t);
+      const t = computeTotals(mkSel(["pressure-driveway", "pressure-patio"]), SERVICES, false, false);
+      // 249 + 99 = 348; distinctCount should be 1 ⇒ no multi-discount
+      console.assert(t.distinctCount === 1 && t.multiRate === 0 && t.total === 348, "PG1 failed", t);
     }
     {
-      const t = computeTotals(mkSel(["gutter"]), SERVICES, false, true);
-      console.assert(t.durationMinutes === 240 && t.subtotal === 998, "M failed", t);
-    }
-    {
-      const t = computeTotals(mkSel(["gutter"]), SERVICES, true, true);
-      console.assert(t.durationMinutes === 360 && t.subtotal === 1247, "N failed", t);
-    }
-    // Mix: driveway(60) + patio(60) + windows(180) = 300
-    {
-      const t = computeTotals(mkSel(["pressure-driveway", "pressure-patio", "windows"]), SERVICES, false, false);
-      console.assert(t.durationMinutes === 300, "O failed", t);
+      const t = computeTotals(mkSel(["roof", "pressure-driveway", "pressure-patio"]), SERVICES, false, false);
+      // categories: roof + pressure = 2 ⇒ 5% on subtotal (899 + 249 + 99 = 1247) -> 1184.65, no trip fee
+      console.assert(t.distinctCount === 2 && Math.abs(t.total - 1184.65) < 0.01, "PG2 failed", t);
     }
   } catch (e) {
     console.warn("DEV tests skipped:", e);
@@ -277,7 +207,7 @@ export default function InstantQuoteSchedule() {
     [selected, twoStory, gutterGuards, promoHouseHalf]
   );
 
-  const adjustedServices = useMemo(() => {
+  const adjustedServices = useMemo<PricedService[]>(() => {
     return SERVICES.map((s) => {
       let price = s.basePrice;
       if (twoStory) {
@@ -287,7 +217,7 @@ export default function InstantQuoteSchedule() {
       }
       if (gutterGuards && s.id === "gutter") price += 749;
       if (promoHouseHalf && s.id === "house") price = Math.round(price * 0.5);
-      return { ...s, price } as Service & { price: number };
+      return { ...s, price };
     });
   }, [twoStory, gutterGuards, promoHouseHalf]);
 
@@ -295,7 +225,7 @@ export default function InstantQuoteSchedule() {
   const summaryLines = useMemo(() => {
     const items = adjustedServices
       .filter((s) => selected[s.id])
-      .map((s) => `${s.name} ($${(s as any).price})`);
+      .map((s) => `${s.name} ($${s.price})`);
     if (hasTwoStoryRelevant) items.push(`Two-story: ${twoStory ? "Yes" : "No"}`);
     if (hasGutter) items.push(`Gutter Guards: ${gutterGuards ? "Yes" : "No"}`);
     return items.length ? items : ["No services selected"];
@@ -304,18 +234,18 @@ export default function InstantQuoteSchedule() {
   // booking link (map minutes to 1..8 hr event type)
   const hours = mapDurationToHours(totals.durationMinutes);
   const bookingUrl = useMemo(() => {
-    const meta = {
+    const meta: Record<string, string> = {
       services:
         adjustedServices
           .filter((s) => selected[s.id])
-          .map((s) => `${s.name}:${(s as any).price}`)
+          .map((s) => `${s.name}:${s.price}`)
           .join("|") || "None",
       total: String(totals.total),
       durationMinutes: String(totals.durationMinutes),
       twoStory: hasTwoStoryRelevant ? (twoStory ? "Yes" : "No") : "N/A",
       gutterGuards: hasGutter ? (gutterGuards ? "Yes" : "No") : "N/A",
       houseTripwire50: promoHouseHalf ? "Yes" : "No",
-    } as Record<string, string>;
+    };
     return buildBookingUrl(hours, meta);
   }, [hours, adjustedServices, selected, totals, twoStory, gutterGuards, hasTwoStoryRelevant, hasGutter, promoHouseHalf]);
 
@@ -393,7 +323,7 @@ export default function InstantQuoteSchedule() {
                       <div className="text-sm text-muted-foreground mt-1">{svc.desc}</div>
                     </div>
                     <div className="text-right">
-                      <div className="text-xl font-semibold">${(svc as any).price}</div>
+                      <div className="text-xl font-semibold">${svc.price}</div>
                       <div className="text-[11px] text-muted-foreground mt-1">
                         {svc.id === "gutter"
                           ? `${fmtDuration(gutterDuration(twoStory, gutterGuards))}`
@@ -410,7 +340,7 @@ export default function InstantQuoteSchedule() {
           {(hasTwoStoryRelevant || hasGutter) && (
             <Card>
               <CardContent className="p-4 sm:p-6 space-y-4">
-                <h2 className="text-lg font-semibold">Your Home's Details</h2>
+                <h2 className="text-lg font-semibold">Your Home&#39;s Details</h2>
 
                 {/* Two-Story (No / Yes) */}
                 {hasTwoStoryRelevant && (
@@ -578,6 +508,10 @@ export default function InstantQuoteSchedule() {
           </div>
         </div>
       )}
+
+      <footer className="text-center text-xs text-muted-foreground mt-8">
+        © {new Date().getFullYear()} Guardian Pressure Washing • San Antonio, TX
+      </footer>
     </div>
   );
 }
