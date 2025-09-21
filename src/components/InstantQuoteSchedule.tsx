@@ -242,7 +242,7 @@ export default function InstantQuoteSchedule() {
 
   return (
     <div className="max-w-6xl mx-auto p-4 sm:p-6 bg-[#f2f3f8]">
-      <header className="mb-6 sm:mb-8 text-center">
+      <header className="mb-3 sm:mb-4 text-center">
         <p className="text-muted-foreground mt-2">
           Select services to see your price. Book instantly.
         </p>
