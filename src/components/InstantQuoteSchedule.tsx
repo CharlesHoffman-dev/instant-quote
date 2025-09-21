@@ -21,12 +21,12 @@ export type Service = { id: string; name: string; basePrice: number; desc: strin
 type PricedService = Service & { price: number };
 
 const SERVICES: Service[] = [
-  { id: "pressure-driveway", name: "Pressure Wash - Driveway", basePrice: 249, desc: "Concrete driveway, front patio, walkway, and curb cleaning." },
-  { id: "pressure-patio", name: "Pressure Wash - Back Patio", basePrice: 99, desc: "Concrete back patio cleaning." },
-  { id: "windows", name: "Window/Screen Clean", basePrice: 449, desc: "Exterior window and screen cleaning." },
-  { id: "house", name: "House Wash", basePrice: 599, desc: "Low-pressure exterior wall cleaning." },
-  { id: "roof", name: "Roof Clean", basePrice: 899, desc: "Low-pressure roof cleaning." },
-  { id: "gutter", name: "Gutter Clean", basePrice: 249, desc: "Debris removal and downspout flush." },
+  { id: "pressure-driveway", name: "Pressure Wash: Driveway", basePrice: 249, desc: "Clean your concrete driveway, front patio, walkway, and curb." },
+  { id: "pressure-patio", name: "Pressure Wash: Back Patio", basePrice: 99, desc: "Clean the concrete patio behind your home." },
+  { id: "windows", name: "Window + Screen Clean", basePrice: 449, desc: "Remove dirt, dust, and fingerprints from exterior windows/screens." },
+  { id: "house", name: "House Wash", basePrice: 599, desc: "Get rid of dust, cobwebs, mold, and mildew on exterior walls." },
+  { id: "roof", name: "Roof Clean", basePrice: 899, desc: "Soft wash your roof to remove black organic streaks." },
+  { id: "gutter", name: "Gutter Clean", basePrice: 249, desc: "Unclog your gutters and downspouts to prevent flooding." },
 ];
 
 export const DISCOUNT_BLURB =
@@ -161,6 +161,16 @@ export default function InstantQuoteSchedule() {
   // tripwire state
   const [showTripwire, setShowTripwire] = useState(false);
   const [promoHouseHalf, setPromoHouseHalf] = useState(false);
+
+  // 🔒 Lock body scroll when modal is open (prevents off-screen shift on mobile)
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = showTripwire ? "hidden" : prev || "";
+    return () => {
+      document.body.style.overflow = prev || "";
+    };
+  }, [showTripwire]);
 
   const hasGutter = !!selected["gutter"];
   const hasTwoStoryRelevant = !!(selected["windows"] || selected["house"] || selected["gutter"]);
@@ -364,8 +374,8 @@ export default function InstantQuoteSchedule() {
           )}
         </div>
 
-        {/* Right: Sticky Summary */}
-        <div className="lg:sticky lg:top-6 self-start">
+        {/* Right: Sticky Summary (now sticky on mobile too) */}
+        <div className="sticky top-2 lg:top-6 self-start z-30">
           <Card>
             <CardContent className="p-4 sm:p-6 space-y-4">
               <h2 className="text-lg font-semibold">Summary</h2>
@@ -423,16 +433,17 @@ export default function InstantQuoteSchedule() {
         </div>
       </div>
 
-      {/* Tripwire Modal */}
+      {/* Tripwire Modal — fully centered, body-scroll locked while open */}
       {showTripwire && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center">
+        <div className="fixed inset-0 z-[60] grid place-items-center">
           <div className="absolute inset-0 bg-black/40" onClick={() => setShowTripwire(false)} />
           <div
             role="dialog"
             aria-modal="true"
-            className="relative z-[61] w-full max-w-md rounded-2xl bg-white shadow-xl p-6"
+            aria-labelledby="tripwire-title"
+            className="relative z-[61] w-[92vw] max-w-md rounded-2xl bg-white shadow-xl p-6"
           >
-            <h3 className="text-lg font-semibold text-center">Add a House Wash for 50% Off?</h3>
+            <h3 id="tripwire-title" className="text-lg font-semibold text-center">Add a House Wash for 50% Off?</h3>
             <p className="mt-2 text-sm text-muted-foreground text-center">
               A house wash cleans the siding of your home using low pressure. Save 50% on this
               service when you add it to your order now.
