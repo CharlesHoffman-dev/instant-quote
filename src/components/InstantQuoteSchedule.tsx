@@ -258,9 +258,10 @@ export default function InstantQuoteSchedule() {
         </p>
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-        {/* Left: Services & Conditional Details */}
-        <div className="lg:col-span-2 space-y-6">
+      {/* CHANGED: explicit 2-col grid at lg+ */}
+      <div className="grid grid-cols-1 lg:[grid-template-columns:2fr_1fr] gap-6 items-start">
+        {/* Left: Services & Conditional Details (CHANGED: remove col-span, add min-w-0) */}
+        <div className="min-w-0 space-y-6">
           {/* Services */}
           <section className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
             {adjustedServices.map((svc) => (
@@ -374,8 +375,8 @@ export default function InstantQuoteSchedule() {
           )}
         </div>
 
-        {/* Right: Sticky Summary (now sticky on mobile too) */}
-        <div className="sticky top-2 lg:top-6 self-start z-30">
+        {/* Right: Sticky Summary (CHANGED: keep sticky, add lg:col-start-2) */}
+        <div className="sticky top-2 lg:top-6 self-start z-30 lg:col-start-2">
           <Card>
             <CardContent className="p-4 sm:p-6 space-y-4">
               <h2 className="text-lg font-semibold">Summary</h2>
@@ -463,7 +464,7 @@ export default function InstantQuoteSchedule() {
               </Button>
               <Button
                 type="button"
-                className="h-11 rounded-xl border-[#2755f8] text-[#2755f8] hover:bg-[#eaf0ff] cursor-pointer"
+                className="h-11 rounded-xl border-[#2755f8] text-[#ffffff] hover:bg-[#6E6E6E] cursor-pointer"
                 onClick={() => {
                   setShowTripwire(false);
                   window.open(bookingUrl, "_blank", "noopener,noreferrer");
