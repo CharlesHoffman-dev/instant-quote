@@ -17,16 +17,51 @@ function cn(...cls: Array<string | false | null | undefined>) {
 /* =============================================================================
    Services, Durations, Discounts
 ============================================================================= */
-export type Service = { id: string; name: string; basePrice: number; desc: string };
+export type Service = {
+  id: string;
+  name: string;
+  basePrice: number;
+  desc: string;
+};
 type PricedService = Service & { price: number };
 
 const SERVICES: Service[] = [
-  { id: "pressure-driveway", name: "Pressure Wash: Driveway", basePrice: 249, desc: "Clean your concrete driveway, front patio, walkway, and curb." },
-  { id: "pressure-patio", name: "Pressure Wash: Back Patio", basePrice: 99, desc: "Clean the concrete patio behind your home." },
-  { id: "windows", name: "Window + Screen Clean", basePrice: 449, desc: "Remove dirt, dust, and fingerprints from exterior windows/screens." },
-  { id: "house", name: "House Wash", basePrice: 599, desc: "Get rid of dust, cobwebs, mold, and mildew on exterior walls." },
-  { id: "roof", name: "Roof Clean", basePrice: 899, desc: "Soft wash your roof to remove black organic streaks." },
-  { id: "gutter", name: "Gutter Clean", basePrice: 249, desc: "Unclog your gutters and downspouts to prevent flooding." },
+  {
+    id: "pressure-driveway",
+    name: "Pressure Wash: Driveway",
+    basePrice: 249,
+    desc: "Clean your concrete driveway, front patio, walkway, and curb.",
+  },
+  {
+    id: "pressure-patio",
+    name: "Pressure Wash: Back Patio",
+    basePrice: 99,
+    desc: "Clean the concrete patio behind your home.",
+  },
+  {
+    id: "windows",
+    name: "Window + Screen Clean",
+    basePrice: 449,
+    desc: "Remove dirt, dust, and fingerprints from exterior windows/screens.",
+  },
+  {
+    id: "house",
+    name: "House Wash",
+    basePrice: 599,
+    desc: "Get rid of dust, cobwebs, mold, and mildew on exterior walls.",
+  },
+  {
+    id: "roof",
+    name: "Roof Clean",
+    basePrice: 899,
+    desc: "Soft wash your roof to remove black organic streaks.",
+  },
+  {
+    id: "gutter",
+    name: "Gutter Clean",
+    basePrice: 249,
+    desc: "Unclog your gutters and downspouts to prevent flooding.",
+  },
 ];
 
 export const DISCOUNT_BLURB =
@@ -66,7 +101,9 @@ function mapDurationToHours(mins: number) {
 function buildBookingUrl(hours: number, meta: Record<string, string>) {
   const base = CAL_URLS[hours] || CAL_URLS[8];
   const u = new URL(base);
-  Object.entries(meta).forEach(([k, v]) => u.searchParams.append(`metadata[${k}]`, v));
+  Object.entries(meta).forEach(([k, v]) =>
+    u.searchParams.append(`metadata[${k}]`, v)
+  );
   return u.toString();
 }
 
@@ -78,14 +115,14 @@ function round2(n: number) {
 }
 
 export type Totals = {
-  selectedCount: number;         // raw count (not used for discount)
-  effectiveCount: number;        // discount count (pressure-* collapse to 1)
+  selectedCount: number; // raw count (not used for discount)
+  effectiveCount: number; // discount count (pressure-* collapse to 1)
   subtotal: number;
   multiRate: number;
   multiAmt: number;
-  tripFee: number;               // ensures $249 minimum
+  tripFee: number; // ensures $249 minimum
   total: number;
-  durationMinutes: number;       // total estimated duration
+  durationMinutes: number; // total estimated duration
 };
 
 function discountCategoryFor(serviceId: string): string {
@@ -120,7 +157,8 @@ export function computeTotals(
   const selectedCount = chosen.length;
 
   // Discount “effective” count: pressure-driveway + pressure-patio => 1
-  const effectiveCount = new Set(chosen.map((s) => discountCategoryFor(s.id))).size;
+  const effectiveCount = new Set(chosen.map((s) => discountCategoryFor(s.id)))
+    .size;
 
   const subtotal = chosen.reduce((sum, s) => sum + s.price, 0);
 
@@ -137,7 +175,9 @@ export function computeTotals(
   // Trip fee brings total up to $249 minimum
   const MIN_TOTAL = 249;
   const tripFee =
-    afterDiscount < MIN_TOTAL && afterDiscount > 0 ? round2(MIN_TOTAL - afterDiscount) : 0;
+    afterDiscount < MIN_TOTAL && afterDiscount > 0
+      ? round2(MIN_TOTAL - afterDiscount)
+      : 0;
 
   const total = Math.max(0, round2(afterDiscount + tripFee));
 
@@ -147,7 +187,16 @@ export function computeTotals(
     return mins + (DURATIONS_MIN[s.id] || 0);
   }, 0);
 
-  return { selectedCount, effectiveCount, subtotal, multiRate, multiAmt, tripFee, total, durationMinutes };
+  return {
+    selectedCount,
+    effectiveCount,
+    subtotal,
+    multiRate,
+    multiAmt,
+    tripFee,
+    total,
+    durationMinutes,
+  };
 }
 
 /* =============================================================================
@@ -173,10 +222,15 @@ export default function InstantQuoteSchedule() {
   }, [showTripwire]);
 
   const hasGutter = !!selected["gutter"];
-  const hasTwoStoryRelevant = !!(selected["windows"] || selected["house"] || selected["gutter"]);
+  const hasTwoStoryRelevant = !!(
+    selected["windows"] ||
+    selected["house"] ||
+    selected["gutter"]
+  );
 
   const totals = useMemo(
-    () => computeTotals(selected, SERVICES, twoStory, gutterGuards, promoHouseHalf),
+    () =>
+      computeTotals(selected, SERVICES, twoStory, gutterGuards, promoHouseHalf),
     [selected, twoStory, gutterGuards, promoHouseHalf]
   );
 
@@ -198,10 +252,18 @@ export default function InstantQuoteSchedule() {
     const items = adjustedServices
       .filter((s) => selected[s.id])
       .map((s) => `${s.name} ($${s.price})`);
-    if (hasTwoStoryRelevant) items.push(`Two-story: ${twoStory ? "Yes" : "No"}`);
+    if (hasTwoStoryRelevant)
+      items.push(`Two-story: ${twoStory ? "Yes" : "No"}`);
     if (hasGutter) items.push(`Gutter Guards: ${gutterGuards ? "Yes" : "No"}`);
     return items.length ? items : ["No services selected"];
-  }, [selected, adjustedServices, twoStory, hasTwoStoryRelevant, hasGutter, gutterGuards]);
+  }, [
+    selected,
+    adjustedServices,
+    twoStory,
+    hasTwoStoryRelevant,
+    hasGutter,
+    gutterGuards,
+  ]);
 
   // booking link (map minutes to 1..8 hr event type)
   const hours = mapDurationToHours(totals.durationMinutes);
@@ -219,7 +281,17 @@ export default function InstantQuoteSchedule() {
       houseTripwire50: promoHouseHalf ? "Yes" : "No",
     } as Record<string, string>;
     return buildBookingUrl(hours, meta);
-  }, [hours, adjustedServices, selected, totals, twoStory, gutterGuards, hasTwoStoryRelevant, hasGutter, promoHouseHalf]);
+  }, [
+    hours,
+    adjustedServices,
+    selected,
+    totals,
+    twoStory,
+    gutterGuards,
+    hasTwoStoryRelevant,
+    hasGutter,
+    promoHouseHalf,
+  ]);
 
   const canSchedule = totals.total > 0;
 
@@ -240,8 +312,12 @@ export default function InstantQuoteSchedule() {
     if (typeof window === "undefined") return;
     function postHeight() {
       try {
-        const h = document.documentElement.scrollHeight || document.body.scrollHeight;
-        window.parent?.postMessage({ type: "resize-quote-iframe", height: h }, "*");
+        const h =
+          document.documentElement.scrollHeight || document.body.scrollHeight;
+        window.parent?.postMessage(
+          { type: "resize-quote-iframe", height: h },
+          "*"
+        );
       } catch {}
     }
     postHeight();
@@ -283,17 +359,23 @@ export default function InstantQuoteSchedule() {
                       onCheckedChange={(v) =>
                         setSelected((prev) => ({ ...prev, [svc.id]: !!v }))
                       }
-                      className="mt-1 pointer-events-none"
+                      className="mt-1 pointer-events-none border-[#2755f8] data-[state=checked]:bg-[#2755f8] data-[state=checked]:text-white"
                     />
                     <div className="flex-1">
-                      <div className="font-medium text-lg leading-tight">{svc.name}</div>
-                      <div className="text-sm text-muted-foreground mt-1">{svc.desc}</div>
+                      <div className="font-medium text-lg leading-tight">
+                        {svc.name}
+                      </div>
+                      <div className="text-sm text-muted-foreground mt-1">
+                        {svc.desc}
+                      </div>
                     </div>
                     <div className="text-right">
                       <div className="text-xl font-semibold">${svc.price}</div>
                       <div className="text-[11px] text-muted-foreground mt-1">
                         {svc.id === "gutter"
-                          ? `${fmtDuration(gutterDuration(twoStory, gutterGuards))}`
+                          ? `${fmtDuration(
+                              gutterDuration(twoStory, gutterGuards)
+                            )}`
                           : `${fmtDuration(DURATIONS_MIN[svc.id])}`}
                       </div>
                     </div>
@@ -307,17 +389,24 @@ export default function InstantQuoteSchedule() {
           {(hasTwoStoryRelevant || hasGutter) && (
             <Card>
               <CardContent className="p-4 sm:p-6 space-y-4">
-                <h2 className="text-lg font-semibold">Your Home&#39;s Details</h2>
+                <h2 className="text-lg font-semibold">
+                  Your Home&#39;s Details
+                </h2>
 
                 {/* Two-Story (No / Yes) */}
                 {hasTwoStoryRelevant && (
                   <div className="mt-1">
-                    <Label className="block mb-2 font-medium">Is your home two stories?</Label>
+                    <Label className="block mb-2 font-medium">
+                      Is your home two stories?
+                    </Label>
                     <div className="flex gap-3">
                       <Button
                         type="button"
                         aria-pressed={!twoStory}
-                        className={cn("h-10 px-4 rounded-xl border", !twoStory ? activeBtn : inactiveBtn)}
+                        className={cn(
+                          "h-10 px-4 rounded-xl border",
+                          !twoStory ? activeBtn : inactiveBtn
+                        )}
                         onClick={() => setTwoStory(false)}
                       >
                         No
@@ -325,7 +414,10 @@ export default function InstantQuoteSchedule() {
                       <Button
                         type="button"
                         aria-pressed={twoStory}
-                        className={cn("h-10 px-4 rounded-xl border", twoStory ? activeBtn : inactiveBtn)}
+                        className={cn(
+                          "h-10 px-4 rounded-xl border",
+                          twoStory ? activeBtn : inactiveBtn
+                        )}
                         onClick={() => setTwoStory(true)}
                       >
                         Yes
@@ -340,7 +432,9 @@ export default function InstantQuoteSchedule() {
                 {/* Gutter Guards (No / Yes, default No) */}
                 {hasGutter && (
                   <div className="mt-1">
-                    <Label className="block mb-2 font-medium">Do you have gutter guards installed?</Label>
+                    <Label className="block mb-2 font-medium">
+                      Do you have gutter guards installed?
+                    </Label>
                     <div className="flex gap-3">
                       <Button
                         type="button"
@@ -366,7 +460,8 @@ export default function InstantQuoteSchedule() {
                       </Button>
                     </div>
                     <p className="text-xs text-muted-foreground mt-2">
-                      Removing and reinstalling gutter guards takes additional time.
+                      Removing and reinstalling gutter guards takes additional
+                      time.
                     </p>
                   </div>
                 )}
@@ -396,7 +491,10 @@ export default function InstantQuoteSchedule() {
                 </div>
                 {totals.multiRate > 0 && (
                   <div className="flex justify-between text-green-600">
-                    <span>Multi-service discount ({Math.round(totals.multiRate * 100)}%)</span>
+                    <span>
+                      Multi-service discount (
+                      {Math.round(totals.multiRate * 100)}%)
+                    </span>
                     <span>- ${totals.multiAmt.toFixed(2)}</span>
                   </div>
                 )}
@@ -426,9 +524,13 @@ export default function InstantQuoteSchedule() {
                 <Calendar className="w-4 h-4 mr-2" /> Schedule Now
               </Button>
               {!canSchedule && (
-                <p className="text-xs text-muted-foreground">Select at least one service to continue.</p>
+                <p className="text-xs text-muted-foreground">
+                  Select at least one service to continue.
+                </p>
               )}
-              <p className="text-[11px] text-muted-foreground">{DISCOUNT_BLURB}</p>
+              <p className="text-[11px] text-muted-foreground">
+                {DISCOUNT_BLURB}
+              </p>
             </CardContent>
           </Card>
         </div>
@@ -437,17 +539,25 @@ export default function InstantQuoteSchedule() {
       {/* Tripwire Modal — fully centered, body-scroll locked while open */}
       {showTripwire && (
         <div className="fixed inset-0 z-[60] grid place-items-center">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setShowTripwire(false)} />
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => setShowTripwire(false)}
+          />
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="tripwire-title"
             className="relative z-[61] w-[92vw] max-w-md rounded-2xl bg-white shadow-xl p-6"
           >
-            <h3 id="tripwire-title" className="text-lg font-semibold text-center">Add a House Wash for 50% Off?</h3>
+            <h3
+              id="tripwire-title"
+              className="text-lg font-semibold text-center"
+            >
+              Add a House Wash for 50% Off?
+            </h3>
             <p className="mt-2 text-sm text-muted-foreground text-center">
-              A house wash cleans the siding of your home using low pressure. Save 50% on this
-              service when you add it to your order now.
+              A house wash cleans the siding of your home using low pressure.
+              Save 50% on this service when you add it to your order now.
             </p>
             <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Button
@@ -457,7 +567,11 @@ export default function InstantQuoteSchedule() {
                   setSelected((prev) => ({ ...prev, house: true }));
                   setPromoHouseHalf(true);
                   setShowTripwire(false);
-                  setTimeout(() => window.open(bookingUrl, "_blank", "noopener,noreferrer"), 0);
+                  setTimeout(
+                    () =>
+                      window.open(bookingUrl, "_blank", "noopener,noreferrer"),
+                    0
+                  );
                 }}
               >
                 Add House Wash (Save 50%)
