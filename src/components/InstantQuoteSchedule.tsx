@@ -39,10 +39,10 @@ const SERVICES: Service[] = [
     desc: "Clean the concrete patio behind your home.",
   },
   {
-    id: "windows",
-    name: "Window + Screen Clean",
-    basePrice: 449,
-    desc: "Remove dirt, dust, and fingerprints from exterior windows/screens.",
+    id: "roof",
+    name: "Roof Clean",
+    basePrice: 899,
+    desc: "Soft wash your roof to remove black organic streaks.",
   },
   {
     id: "house",
@@ -51,16 +51,16 @@ const SERVICES: Service[] = [
     desc: "Get rid of dust, cobwebs, mold, and mildew on exterior walls.",
   },
   {
-    id: "roof",
-    name: "Roof Clean",
-    basePrice: 899,
-    desc: "Soft wash your roof to remove black organic streaks.",
-  },
-  {
     id: "gutter",
     name: "Gutter Clean",
     basePrice: 249,
     desc: "Unclog your gutters and downspouts to prevent flooding.",
+  },
+  {
+    id: "windows",
+    name: "Window + Screen Clean",
+    basePrice: 449,
+    desc: "Remove dirt, dust, and fingerprints from exterior windows/screens.",
   },
 ];
 
@@ -200,16 +200,21 @@ export function computeTotals(
 }
 
 /* =============================================================================
-   Component (details removed – cal.com collects them)
+   Component
 ============================================================================= */
 export default function InstantQuoteSchedule() {
   const [selected, setSelected] = useState<Record<string, boolean>>({});
-  const [twoStory, setTwoStory] = useState(false);
-  const [gutterGuards, setGutterGuards] = useState<boolean>(false); // default No
+
+  // REQUIRED fields: start as null (no default)
+  const [twoStory, setTwoStory] = useState<boolean | null>(null);
+  const [gutterGuards, setGutterGuards] = useState<boolean | null>(null);
 
   // tripwire state
   const [showTripwire, setShowTripwire] = useState(false);
   const [promoHouseHalf, setPromoHouseHalf] = useState(false);
+
+  // UX: show validation messages after trying to schedule
+  const [attemptedSchedule, setAttemptedSchedule] = useState(false);
 
   // 🔒 Lock body scroll when modal is open (prevents off-screen shift on mobile)
   useEffect(() => {
@@ -228,21 +233,28 @@ export default function InstantQuoteSchedule() {
     selected["gutter"]
   );
 
+  // Use false for pricing/duration when unanswered, but block scheduling separately
   const totals = useMemo(
     () =>
-      computeTotals(selected, SERVICES, twoStory, gutterGuards, promoHouseHalf),
+      computeTotals(
+        selected,
+        SERVICES,
+        twoStory ?? false,
+        gutterGuards ?? false,
+        promoHouseHalf
+      ),
     [selected, twoStory, gutterGuards, promoHouseHalf]
   );
 
   const adjustedServices = useMemo<PricedService[]>(() => {
     return SERVICES.map((s) => {
       let price = s.basePrice;
-      if (twoStory) {
+      if (twoStory ?? false) {
         if (s.id === "gutter") price = s.basePrice * 2;
         if (s.id === "house") price = s.basePrice + 100;
         if (s.id === "windows") price = s.basePrice + 100;
       }
-      if (gutterGuards && s.id === "gutter") price += 749;
+      if ((gutterGuards ?? false) && s.id === "gutter") price += 749;
       if (promoHouseHalf && s.id === "house") price = Math.round(price * 0.5);
       return { ...s, price };
     });
@@ -253,8 +265,17 @@ export default function InstantQuoteSchedule() {
       .filter((s) => selected[s.id])
       .map((s) => `${s.name} ($${s.price})`);
     if (hasTwoStoryRelevant)
-      items.push(`Two-story: ${twoStory ? "Yes" : "No"}`);
-    if (hasGutter) items.push(`Gutter Guards: ${gutterGuards ? "Yes" : "No"}`);
+      items.push(
+        `Two-story: ${
+          twoStory === null ? "Select Yes/No" : twoStory ? "Yes" : "No"
+        }`
+      );
+    if (hasGutter)
+      items.push(
+        `Gutter Guards: ${
+          gutterGuards === null ? "Select Yes/No" : gutterGuards ? "Yes" : "No"
+        }`
+      );
     return items.length ? items : ["No services selected"];
   }, [
     selected,
@@ -268,18 +289,39 @@ export default function InstantQuoteSchedule() {
   // booking link (map minutes to 1..8 hr event type)
   const hours = mapDurationToHours(totals.durationMinutes);
   const bookingUrl = useMemo(() => {
+    const chosen = adjustedServices.filter((s) => selected[s.id]);
+
+    // ✅ Clean, human-readable services list (e.g. "Roof Clean ($899.00), Gutter Clean ($498.00)")
+    const servicesList =
+      chosen.map((s) => `${s.name} ($${s.price.toFixed(2)})`).join(", ") ||
+      "None";
+
+    // ✅ Include discount breakdown explicitly
     const meta = {
-      services:
-        adjustedServices
-          .filter((s) => selected[s.id])
-          .map((s) => `${s.name}:${s.price}`)
-          .join("|") || "None",
-      total: String(totals.total),
+      services: servicesList,
+      subtotal: totals.subtotal.toFixed(2),
+      discountRate: `${(totals.multiRate * 100).toFixed(0)}%`,
+      discountAmount: totals.multiAmt.toFixed(2),
+      total: totals.total.toFixed(2),
       durationMinutes: String(totals.durationMinutes),
-      twoStory: hasTwoStoryRelevant ? (twoStory ? "Yes" : "No") : "N/A",
-      gutterGuards: hasGutter ? (gutterGuards ? "Yes" : "No") : "N/A",
+      effectiveServiceCount: String(totals.effectiveCount),
+      twoStory: hasTwoStoryRelevant
+        ? twoStory === null
+          ? "Required"
+          : twoStory
+          ? "Yes"
+          : "No"
+        : "N/A",
+      gutterGuards: hasGutter
+        ? gutterGuards === null
+          ? "Required"
+          : gutterGuards
+          ? "Yes"
+          : "No"
+        : "N/A",
       houseTripwire50: promoHouseHalf ? "Yes" : "No",
     } as Record<string, string>;
+
     return buildBookingUrl(hours, meta);
   }, [
     hours,
@@ -293,7 +335,12 @@ export default function InstantQuoteSchedule() {
     promoHouseHalf,
   ]);
 
-  const canSchedule = totals.total > 0;
+  // Required-field gating for scheduling
+  const needsTwoStory = hasTwoStoryRelevant && twoStory === null;
+  const needsGutterGuards = hasGutter && gutterGuards === null;
+
+  const canSchedule =
+    totals.total > 0 && !needsTwoStory && !needsGutterGuards;
 
   const activeBtn =
     "bg-[#2755f8] text-white border-[#2755f8] hover:bg-[#1e45d1] hover:text-white cursor-pointer";
@@ -334,9 +381,9 @@ export default function InstantQuoteSchedule() {
         </p>
       </header>
 
-      {/* CHANGED: explicit 2-col grid at lg+ */}
-      <div className="grid grid-cols-1 lg:[grid-template-columns:2fr_1fr] gap-6 items-start">
-        {/* Left: Services & Conditional Details (CHANGED: remove col-span, add min-w-0) */}
+      {/* Responsive two-column layout: 1-col on mobile, 2-col on desktop */}
+      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6 items-start">
+        {/* Left: Services & Conditional Details */}
         <div className="min-w-0 space-y-6">
           {/* Services */}
           <section className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
@@ -374,7 +421,10 @@ export default function InstantQuoteSchedule() {
                       <div className="text-[11px] text-muted-foreground mt-1">
                         {svc.id === "gutter"
                           ? `${fmtDuration(
-                              gutterDuration(twoStory, gutterGuards)
+                              gutterDuration(
+                                twoStory ?? false,
+                                gutterGuards ?? false
+                              )
                             )}`
                           : `${fmtDuration(DURATIONS_MIN[svc.id])}`}
                       </div>
@@ -402,10 +452,10 @@ export default function InstantQuoteSchedule() {
                     <div className="flex gap-3">
                       <Button
                         type="button"
-                        aria-pressed={!twoStory}
+                        aria-pressed={twoStory === false}
                         className={cn(
                           "h-10 px-4 rounded-xl border",
-                          !twoStory ? activeBtn : inactiveBtn
+                          twoStory === false ? activeBtn : inactiveBtn
                         )}
                         onClick={() => setTwoStory(false)}
                       >
@@ -413,23 +463,30 @@ export default function InstantQuoteSchedule() {
                       </Button>
                       <Button
                         type="button"
-                        aria-pressed={twoStory}
+                        aria-pressed={twoStory === true}
                         className={cn(
                           "h-10 px-4 rounded-xl border",
-                          twoStory ? activeBtn : inactiveBtn
+                          twoStory === true ? activeBtn : inactiveBtn
                         )}
                         onClick={() => setTwoStory(true)}
                       >
                         Yes
                       </Button>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      Two-story homes require extra setup time and ladder work.
-                    </p>
+                    {attemptedSchedule && twoStory === null && (
+                      <p className="text-xs text-red-600 mt-2">
+                        Please select Yes or No.
+                      </p>
+                    )}
+                    {!attemptedSchedule && twoStory === null && (
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Required.
+                      </p>
+                    )}
                   </div>
                 )}
 
-                {/* Gutter Guards (No / Yes, default No) */}
+                {/* Gutter Guards (No / Yes, default unselected) */}
                 {hasGutter && (
                   <div className="mt-1">
                     <Label className="block mb-2 font-medium">
@@ -459,10 +516,16 @@ export default function InstantQuoteSchedule() {
                         Yes
                       </Button>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      Removing and reinstalling gutter guards takes additional
-                      time.
-                    </p>
+                    {attemptedSchedule && gutterGuards === null && (
+                      <p className="text-xs text-red-600 mt-2">
+                        Please select Yes or No.
+                      </p>
+                    )}
+                    {!attemptedSchedule && gutterGuards === null && (
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Required.
+                      </p>
+                    )}
                   </div>
                 )}
               </CardContent>
@@ -470,8 +533,8 @@ export default function InstantQuoteSchedule() {
           )}
         </div>
 
-        {/* Right: Sticky Summary (CHANGED: keep sticky, add lg:col-start-2) */}
-        <div className="sticky top-2 lg:top-6 self-start z-30 lg:col-start-2">
+        {/* Right: Sticky Summary (desktop) */}
+        <div className="sticky top-4 self-start z-30 lg:col-start-2 h-fit">
           <Card>
             <CardContent className="p-4 sm:p-6 space-y-4">
               <h2 className="text-lg font-semibold">Summary</h2>
@@ -492,8 +555,7 @@ export default function InstantQuoteSchedule() {
                 {totals.multiRate > 0 && (
                   <div className="flex justify-between text-green-600">
                     <span>
-                      Multi-service discount (
-                      {Math.round(totals.multiRate * 100)}%)
+                      Bundle discount ({Math.round(totals.multiRate * 100)}%)
                     </span>
                     <span>- ${totals.multiAmt.toFixed(2)}</span>
                   </div>
@@ -514,6 +576,8 @@ export default function InstantQuoteSchedule() {
                 className="w-full h-11 text-base bg-[#2755f8] hover:bg-[#1e45d1] text-white cursor-pointer"
                 disabled={!canSchedule}
                 onClick={() => {
+                  setAttemptedSchedule(true);
+                  if (!canSchedule) return; // block until required answers provided
                   if (!selected["house"]) {
                     setShowTripwire(true);
                     return;
@@ -524,13 +588,60 @@ export default function InstantQuoteSchedule() {
                 <Calendar className="w-4 h-4 mr-2" /> Schedule Now
               </Button>
               {!canSchedule && (
-                <p className="text-xs text-muted-foreground">
-                  Select at least one service to continue.
+                <p className="text-xs text-red-600">
+                  {totals.total <= 0
+                    ? "Select at least one service."
+                    : needsTwoStory && needsGutterGuards
+                    ? "Answer the two required questions."
+                    : needsTwoStory
+                    ? "Please answer: Is your home two stories?"
+                    : "Please answer: Do you have gutter guards installed?"}
                 </p>
               )}
-              <p className="text-[11px] text-muted-foreground">
-                {DISCOUNT_BLURB}
-              </p>
+
+              {/* Bundle & Save (multiline, only tier highlight) */}
+              <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-center text-sm leading-relaxed text-blue-900 mb-0">
+                <p className="font-semibold text-black">Bundle & Save 💰</p>
+
+                <p
+                  className={cn(
+                    "transition-colors",
+                    totals.effectiveCount === 2 &&
+                      "font-semibold text-[#2755f8]"
+                  )}
+                >
+                  2 services → 5% off
+                </p>
+
+                <p
+                  className={cn(
+                    "transition-colors",
+                    totals.effectiveCount === 3 &&
+                      "font-semibold text-[#2755f8]"
+                  )}
+                >
+                  3 services → 10% off
+                </p>
+
+                <p
+                  className={cn(
+                    "transition-colors",
+                    totals.effectiveCount === 4 &&
+                      "font-semibold text-[#2755f8]"
+                  )}
+                >
+                  4 services → 15% off
+                </p>
+
+                <p
+                  className={cn(
+                    "transition-colors",
+                    totals.effectiveCount >= 5 && "font-semibold text-[#2755f8]"
+                  )}
+                >
+                  5+ services → 20% off
+                </p>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -574,7 +685,7 @@ export default function InstantQuoteSchedule() {
                   );
                 }}
               >
-                Add House Wash (Save 50%)
+                Add House Wash
               </Button>
               <Button
                 type="button"
