@@ -141,7 +141,7 @@ export function computeTotals(
 }
 
 /* =============================================================================
-   Component (No tripwire/upsell)
+   Component (stacked services, summary on right)
 ============================================================================= */
 export default function InstantQuoteSchedule() {
   const [selected, setSelected] = useState<Record<string, boolean>>({});
@@ -153,7 +153,6 @@ export default function InstantQuoteSchedule() {
   const sizerRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (typeof window === "undefined" || typeof document === "undefined") return;
-
     let lastQuantized = 0;
     let raf = 0;
     const STEP = 24;
@@ -185,17 +184,14 @@ export default function InstantQuoteSchedule() {
     });
     ro.observe(document.documentElement);
     ro.observe(document.body);
-
     type DocWithFonts = Document & { fonts?: { ready?: Promise<unknown> } };
     (document as DocWithFonts).fonts?.ready?.then(() => postHeight());
-
     window.addEventListener("load", postHeight);
     const onResize = () => {
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(postHeight);
     };
     window.addEventListener("resize", onResize);
-
     return () => {
       cancelAnimationFrame(raf);
       ro.disconnect();
@@ -274,67 +270,54 @@ export default function InstantQuoteSchedule() {
   return (
     <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-0 bg-[#f2f3f8]">
       <header className="mt-0 mb-6 sm:mb-6 text-center">
-        <p className="text-muted-foreground mt-2">
-          Select services to see your price. Book instantly.
-        </p>
+        <p className="text-muted-foreground mt-2">Select services to see your price. Book instantly.</p>
       </header>
 
-      {/* Desktop: 2 columns — services (fluid) + summary (fixed 360px) */}
+      {/* Desktop: 2 columns — left (stacked services) + right (fixed summary) */}
       <div className="grid gap-6 items-start md:grid-cols-[minmax(0,1fr)_360px]">
-        {/* Services + details (fluid column) */}
-        <div className="min-w-0 space-y-6">
-          {/* Services grid */}
-          <section className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-            {adjustedServices.map((svc) => (
-              <Card
-                key={svc.id}
-                className={cn(
-                  "transition hover:shadow-lg cursor-pointer h-full",
-                  selected[svc.id] && "ring-2 ring-[#2755f8]/60"
-                )}
-                onClick={() =>
-                  setSelected((prev) => ({ ...prev, [svc.id]: !prev[svc.id] }))
-                }
-              >
-                <CardContent className="p-4 sm:p-6">
-                  <div className="flex items-start gap-3 min-h-[120px]">
-                    <Checkbox
-                      id={svc.id}
-                      checked={!!selected[svc.id]}
-                      onCheckedChange={(v) =>
-                        setSelected((prev) => ({ ...prev, [svc.id]: !!v }))
-                      }
-                      className="mt-1 pointer-events-none border-[#2755f8] data-[state=checked]:bg-[#2755f8] data-[state=checked]:text-white"
-                    />
-                    <div className="flex-1">
-                      <div className="font-medium text-lg leading-tight">
-                        {svc.name}
-                      </div>
-                      <div className="text-sm text-muted-foreground mt-1">
-                        {svc.desc}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-xl font-semibold">${svc.price}</div>
-                      <div className="text-[11px] text-muted-foreground mt-1">
-                        {svc.id === "gutter"
-                          ? `${fmtDuration(gutterDuration(twoStory ?? false, gutterGuards ?? false))}`
-                          : `${fmtDuration(DURATIONS_MIN[svc.id])}`}
-                      </div>
+        {/* Left column — stacked cards */}
+        <div className="min-w-0 flex flex-col gap-4 sm:gap-6">
+          {adjustedServices.map((svc) => (
+            <Card
+              key={svc.id}
+              className={cn(
+                "transition hover:shadow-lg cursor-pointer",
+                selected[svc.id] && "ring-2 ring-[#2755f8]/60"
+              )}
+              onClick={() => setSelected((prev) => ({ ...prev, [svc.id]: !prev[svc.id] }))}
+            >
+              <CardContent className="p-4 sm:p-6">
+                <div className="flex items-start gap-3">
+                  <Checkbox
+                    id={svc.id}
+                    checked={!!selected[svc.id]}
+                    onCheckedChange={(v) => setSelected((prev) => ({ ...prev, [svc.id]: !!v }))}
+                    className="mt-1 pointer-events-none border-[#2755f8] data-[state=checked]:bg-[#2755f8] data-[state=checked]:text-white"
+                  />
+                  <div className="flex-1">
+                    <div className="font-medium text-lg leading-tight">{svc.name}</div>
+                    <div className="text-sm text-muted-foreground mt-1">{svc.desc}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-xl font-semibold">${svc.price}</div>
+                    <div className="text-[11px] text-muted-foreground mt-1">
+                      {svc.id === "gutter"
+                        ? `${fmtDuration(gutterDuration(twoStory ?? false, gutterGuards ?? false))}`
+                        : `${fmtDuration(DURATIONS_MIN[svc.id])}`}
                     </div>
                   </div>
-                </CardContent>
-              </Card>
-            ))}
-          </section>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
 
-          {/* Details Card (conditional) */}
+          {/* Details Card (below the list) */}
           {(!!selected["windows"] || !!selected["house"] || !!selected["gutter"]) && (
             <Card>
               <CardContent className="p-4 sm:p-6 space-y-4">
                 <h2 className="text-lg font-semibold">Your Home&#39;s Details</h2>
 
-                {/* Two-Story (No / Yes) */}
+                {/* Two-Story */}
                 {(!!selected["windows"] || !!selected["house"] || !!selected["gutter"]) && (
                   <div className="mt-1">
                     <Label className="block mb-2 font-medium">Is your home two stories?</Label>
@@ -365,7 +348,7 @@ export default function InstantQuoteSchedule() {
                   </div>
                 )}
 
-                {/* Gutter Guards (No / Yes) */}
+                {/* Gutter Guards */}
                 {!!selected["gutter"] && (
                   <div className="mt-1">
                     <Label className="block mb-2 font-medium">Do you have gutter guards installed?</Label>
@@ -400,7 +383,7 @@ export default function InstantQuoteSchedule() {
           )}
         </div>
 
-        {/* Summary (fixed width on desktop) */}
+        {/* Right column — Summary */}
         <aside className="sticky top-4 self-start z-30 h-fit">
           <Card>
             <CardContent className="p-4 sm:p-6 space-y-4">
