@@ -26,43 +26,16 @@ export type Service = {
 type PricedService = Service & { price: number };
 
 const SERVICES: Service[] = [
-  {
-    id: "pressure-driveway",
-    name: "Pressure Wash: Driveway",
-    basePrice: 249,
-    desc: "Clean your concrete driveway, front patio, walkway, and curb.",
-  },
-  {
-    id: "pressure-patio",
-    name: "Pressure Wash: Back Patio",
-    basePrice: 99,
-    desc: "Clean the concrete patio behind your home.",
-  },
-  {
-    id: "roof",
-    name: "Roof Clean",
-    basePrice: 899,
-    desc: "Soft wash your roof to remove black organic streaks.",
-  },
-  {
-    id: "house",
-    name: "House Wash",
-    basePrice: 599,
-    desc: "Get rid of dust, cobwebs, mold, and mildew on exterior walls.",
-  },
-  {
-    id: "gutter",
-    name: "Gutter Clean",
-    basePrice: 249,
-    desc: "Unclog your gutters and downspouts to prevent flooding.",
-  },
-  {
-    id: "windows",
-    name: "Window + Screen Clean",
-    basePrice: 449,
-    desc: "Remove dirt, dust, and fingerprints from exterior windows/screens.",
-  },
+  { id: "pressure-driveway", name: "Pressure Wash: Driveway", basePrice: 249, desc: "Clean your concrete driveway, front patio, walkway, and curb." },
+  { id: "pressure-patio", name: "Pressure Wash: Back Patio", basePrice: 99, desc: "Clean the concrete patio behind your home." },
+  { id: "roof", name: "Roof Clean", basePrice: 899, desc: "Soft wash your roof to remove black organic streaks." },
+  { id: "house", name: "House Wash", basePrice: 599, desc: "Get rid of dust, cobwebs, mold, and mildew on exterior walls." },
+  { id: "gutter", name: "Gutter Clean", basePrice: 249, desc: "Unclog your gutters and downspouts to prevent flooding." },
+  { id: "windows", name: "Window + Screen Clean", basePrice: 449, desc: "Remove dirt, dust, and fingerprints from exterior windows/screens." },
 ];
+
+export const DISCOUNT_BLURB =
+  "Bundle & Save: 2 services 5% • 3 services 10% • 4 services 15% • 5+ services 20%";
 
 // Duration (minutes) per service
 const DURATIONS_MIN: Record<string, number> = {
@@ -90,19 +63,15 @@ const CAL_URLS: Record<number, string> = {
   7: "https://cal.com/guardian-pressure-washing/7-hour-job?overlayCalendar=true",
   8: "https://cal.com/guardian-pressure-washing/8-hour-job?overlayCalendar=true",
 };
-
 function mapDurationToHours(mins: number) {
   if (!mins || mins < 0) return 1;
   const h = Math.ceil(mins / 60);
   return Math.min(Math.max(h, 1), 8);
 }
-
 function buildBookingUrl(hours: number, meta: Record<string, string>) {
   const base = CAL_URLS[hours] || CAL_URLS[8];
   const u = new URL(base);
-  Object.entries(meta).forEach(([k, v]) =>
-    u.searchParams.append(`metadata[${k}]`, v)
-  );
+  Object.entries(meta).forEach(([k, v]) => u.searchParams.append(`metadata[${k}]`, v));
   return u.toString();
 }
 
@@ -148,9 +117,7 @@ export function computeTotals(
     return { ...s, price };
   });
 
-  const chosen = adjustedServices.filter((s) =>
-    Boolean(selectedMap[s.id])
-  ) as PricedService[];
+  const chosen = adjustedServices.filter((s) => Boolean(selectedMap[s.id])) as PricedService[];
 
   const selectedCount = chosen.length;
   const effectiveCount = new Set(chosen.map((s) => discountCategoryFor(s.id))).size;
@@ -166,10 +133,7 @@ export function computeTotals(
   const afterDiscount = round2(subtotal - multiAmt);
 
   const MIN_TOTAL = 249;
-  const tripFee =
-    afterDiscount < MIN_TOTAL && afterDiscount > 0
-      ? round2(MIN_TOTAL - afterDiscount)
-      : 0;
+  const tripFee = afterDiscount < MIN_TOTAL && afterDiscount > 0 ? round2(MIN_TOTAL - afterDiscount) : 0;
 
   const total = Math.max(0, round2(afterDiscount + tripFee));
 
@@ -182,10 +146,12 @@ export function computeTotals(
 }
 
 /* =============================================================================
-   Component (Inline Upsell only — NO modal/parent messaging)
+   Component (Inline Upsell inside Summary card)
 ============================================================================= */
 export default function InstantQuoteSchedule() {
   const [selected, setSelected] = useState<Record<string, boolean>>({});
+
+  // REQUIRED fields: start as null (no default)
   const [twoStory, setTwoStory] = useState<boolean | null>(null);
   const [gutterGuards, setGutterGuards] = useState<boolean | null>(null);
 
@@ -196,29 +162,24 @@ export default function InstantQuoteSchedule() {
   // Promo state
   const [promoHouseHalf, setPromoHouseHalf] = useState(false);
 
-  // Validation after click
+  // UX: show validation messages after trying to schedule
   const [attemptedSchedule, setAttemptedSchedule] = useState(false);
 
-  // Height reporting for parent page (no ts-ignore)
+  // ---- Robust iframe auto-height: sentinel + quantization ----
   const sizerRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (typeof window === "undefined" || typeof document === "undefined") return;
 
     let lastQuantized = 0;
     let raf = 0;
-    const STEP = 24;
+    const STEP = 24; // snap to 24px to reduce jitter
 
     const measure = () => {
       const el = sizerRef.current;
       if (!el) {
         const doc = document.documentElement;
         const body = document.body;
-        return Math.max(
-          doc.scrollHeight,
-          body.scrollHeight,
-          doc.offsetHeight,
-          body.offsetHeight
-        );
+        return Math.max(doc.scrollHeight, body.scrollHeight, doc.offsetHeight, body.offsetHeight);
       }
       return el.offsetTop + el.offsetHeight;
     };
@@ -233,8 +194,8 @@ export default function InstantQuoteSchedule() {
       }
     };
 
+    // Initial + observers
     postHeight();
-
     const ro = new ResizeObserver(() => {
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(postHeight);
@@ -242,9 +203,9 @@ export default function InstantQuoteSchedule() {
     ro.observe(document.documentElement);
     ro.observe(document.body);
 
+    // wait for web fonts without ts-ignore
     type DocWithFonts = Document & { fonts?: { ready?: Promise<unknown> } };
-    const fontsReady = (document as DocWithFonts).fonts?.ready;
-    fontsReady?.then(postHeight);
+    (document as DocWithFonts).fonts?.ready?.then(() => postHeight());
 
     window.addEventListener("load", postHeight);
     const onResize = () => {
@@ -270,21 +231,19 @@ export default function InstantQuoteSchedule() {
     [selected, twoStory, gutterGuards, promoHouseHalf]
   );
 
-  const adjustedServices = useMemo<PricedService[]>(
-    () =>
-      SERVICES.map((s) => {
-        let price = s.basePrice;
-        if (twoStory ?? false) {
-          if (s.id === "gutter") price = s.basePrice * 2;
-          if (s.id === "house") price = s.basePrice + 100;
-          if (s.id === "windows") price = s.basePrice + 100;
-        }
-        if ((gutterGuards ?? false) && s.id === "gutter") price += 749;
-        if (promoHouseHalf && s.id === "house") price = Math.round(price * 0.5);
-        return { ...s, price };
-      }),
-    [twoStory, gutterGuards, promoHouseHalf]
-  );
+  const adjustedServices = useMemo<PricedService[]>(() => {
+    return SERVICES.map((s) => {
+      let price = s.basePrice;
+      if (twoStory ?? false) {
+        if (s.id === "gutter") price = s.basePrice * 2;
+        if (s.id === "house") price = s.basePrice + 100;
+        if (s.id === "windows") price = s.basePrice + 100;
+      }
+      if ((gutterGuards ?? false) && s.id === "gutter") price += 749;
+      if (promoHouseHalf && s.id === "house") price = Math.round(price * 0.5);
+      return { ...s, price };
+    });
+  }, [twoStory, gutterGuards, promoHouseHalf]);
 
   const summaryLines = useMemo(() => {
     const items = adjustedServices.filter((s) => selected[s.id]).map((s) => `${s.name} ($${s.price})`);
@@ -314,12 +273,13 @@ export default function InstantQuoteSchedule() {
     return buildBookingUrl(hours, meta);
   }, [hours, adjustedServices, selected, totals, twoStory, gutterGuards, hasTwoStoryRelevant, hasGutter, promoHouseHalf]);
 
+  // Latest booking url for click handlers that run after setState
   const bookingUrlRef = useRef(bookingUrl);
   useEffect(() => {
     bookingUrlRef.current = bookingUrl;
   }, [bookingUrl]);
 
-  // Required-field gating
+  // Required-field gating for scheduling
   const needsTwoStory = hasTwoStoryRelevant && twoStory === null;
   const needsGutterGuards = hasGutter && gutterGuards === null;
   const canSchedule = totals.total > 0 && !needsTwoStory && !needsGutterGuards;
@@ -345,9 +305,9 @@ export default function InstantQuoteSchedule() {
         </p>
       </header>
 
-      {/* Layout */}
+      {/* Responsive two-column layout: 1-col on mobile, 2-col from md up */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
-        {/* Left column */}
+        {/* Left: Services & Conditional Details */}
         <div className="min-w-0 space-y-6 md:col-span-2">
           {/* Services */}
           <section className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
@@ -394,13 +354,13 @@ export default function InstantQuoteSchedule() {
             ))}
           </section>
 
-          {/* Details Card */}
+          {/* Details Card: ONLY shows when relevant yes/no exists */}
           {(!!selected["windows"] || !!selected["house"] || !!selected["gutter"]) && (
             <Card>
               <CardContent className="p-4 sm:p-6 space-y-4">
                 <h2 className="text-lg font-semibold">Your Home&#39;s Details</h2>
 
-                {/* Two-Story */}
+                {/* Two-Story (No / Yes) */}
                 {(!!selected["windows"] || !!selected["house"] || !!selected["gutter"]) && (
                   <div className="mt-1">
                     <Label className="block mb-2 font-medium">Is your home two stories?</Label>
@@ -431,7 +391,7 @@ export default function InstantQuoteSchedule() {
                   </div>
                 )}
 
-                {/* Gutter Guards */}
+                {/* Gutter Guards (No / Yes) */}
                 {!!selected["gutter"] && (
                   <div className="mt-1">
                     <Label className="block mb-2 font-medium">Do you have gutter guards installed?</Label>
@@ -466,48 +426,10 @@ export default function InstantQuoteSchedule() {
           )}
         </div>
 
-        {/* Inline Upsell (only when House Wash not selected) */}
-        {!selected["house"] && showUpsell && (
-          <div ref={upsellRef} className="md:col-span-3">
-            <div className="rounded-2xl border bg-white p-4 sm:p-6 shadow-sm">
-              <h3 className="text-lg font-semibold text-center">
-                Add a House Wash for <span className="text-[#2755f8]">50% Off</span>?
-              </h3>
-              <p className="mt-2 text-sm text-muted-foreground text-center">
-                A gentle low-pressure wash that removes dust, cobwebs, mold, and mildew from exterior walls.
-              </p>
-              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Button
-                  type="button"
-                  className="h-11 rounded-xl bg-[#2755f8] hover:bg-[#1e45d1] text-white cursor-pointer"
-                  onClick={() => {
-                    setSelected((prev) => ({ ...prev, house: true }));
-                    setPromoHouseHalf(true);
-                    setShowUpsell(false);
-                    setTimeout(() => window.open(bookingUrlRef.current, "_blank", "noopener,noreferrer"), 0);
-                  }}
-                >
-                  Add House Wash
-                </Button>
-                <Button
-                  type="button"
-                  className="h-11 rounded-xl border-[#2755f8] text-[#ffffff] hover:bg-[#6E6E6E] cursor-pointer"
-                  onClick={() => {
-                    setShowUpsell(false);
-                    window.open(bookingUrlRef.current, "_blank", "noopener,noreferrer");
-                  }}
-                >
-                  No Thanks
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Right column: Summary */}
+        {/* Right: Sticky Summary (desktop) */}
         <div className="sticky top-4 self-start z-30 md:col-span-1 h-fit">
           <Card>
-            <CardContent className="p-4 sm:px-6 space-y-4">
+            <CardContent className="p-4 sm:p-6 space-y-4">
               <h2 className="text-lg font-semibold">Summary</h2>
               <ul className="text-sm list-disc pl-5 space-y-1">
                 {summaryLines.map((line, i) => (
@@ -540,6 +462,7 @@ export default function InstantQuoteSchedule() {
                   <span>${totals.total.toFixed(2)}</span>
                 </div>
               </div>
+
               <Button
                 type="button"
                 className="w-full h-11 text-base bg-[#2755f8] hover:bg-[#1e45d1] text-white cursor-pointer"
@@ -548,6 +471,7 @@ export default function InstantQuoteSchedule() {
                   setAttemptedSchedule(true);
                   if (!canSchedule) return;
 
+                  // If House Wash not selected, reveal inline upsell and focus it
                   if (!selected["house"]) {
                     setShowUpsell(true);
                     requestAnimationFrame(() => {
@@ -561,19 +485,57 @@ export default function InstantQuoteSchedule() {
               >
                 <Calendar className="w-4 h-4 mr-2" /> Schedule Now
               </Button>
+
               {!canSchedule && (
                 <p className="text-xs text-red-600">
                   {totals.total <= 0
                     ? "Select at least one service."
-                    : hasTwoStoryRelevant && twoStory === null && hasGutter && gutterGuards === null
+                    : needsTwoStory && needsGutterGuards
                     ? "Answer the two required questions."
-                    : hasTwoStoryRelevant && twoStory === null
+                    : needsTwoStory
                     ? "Please answer: Is your home two stories?"
                     : "Please answer: Do you have gutter guards installed?"}
                 </p>
               )}
 
-              {/* Bundle & Save */}
+              {/* ✅ Inline Upsell inside the Summary card */}
+              {!selected["house"] && showUpsell && (
+                <div ref={upsellRef} className="mt-4 rounded-2xl border bg-white p-4 sm:p-5 shadow-sm">
+                  <h3 className="text-base sm:text-lg font-semibold text-center">
+                    Add a House Wash for <span className="text-[#2755f8]">50% Off</span>?
+                  </h3>
+                  <p className="mt-2 text-sm text-muted-foreground text-center">
+                    A gentle low-pressure wash that removes dust, cobwebs, mold, and mildew from exterior walls.
+                  </p>
+                  <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Button
+                      type="button"
+                      className="h-11 rounded-xl bg-[#2755f8] hover:bg-[#1e45d1] text-white cursor-pointer"
+                      onClick={() => {
+                        setSelected((prev) => ({ ...prev, house: true }));
+                        setPromoHouseHalf(true);
+                        setShowUpsell(false);
+                        setTimeout(() => window.open(bookingUrlRef.current, "_blank", "noopener,noreferrer"), 0);
+                      }}
+                    >
+                      Add House Wash
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-11 rounded-xl"
+                      onClick={() => {
+                        setShowUpsell(false);
+                        window.open(bookingUrlRef.current, "_blank", "noopener,noreferrer");
+                      }}
+                    >
+                      No Thanks
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Bundle & Save (multiline, only tier highlight) */}
               <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-center text-sm leading-relaxed text-blue-900 mb-0">
                 <p className="font-semibold text-black">Bundle & Save 💰</p>
                 <p className={cn("transition-colors", totals.effectiveCount === 2 && "font-semibold text-[#2755f8]")}>
