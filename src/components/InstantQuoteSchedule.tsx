@@ -26,12 +26,42 @@ export type Service = {
 type PricedService = Service & { price: number };
 
 const SERVICES: Service[] = [
-  { id: "pressure-driveway", name: "Pressure Wash: Driveway", basePrice: 249, desc: "Clean your concrete driveway, front patio, walkway, and curb." },
-  { id: "pressure-patio", name: "Pressure Wash: Back Patio", basePrice: 99, desc: "Clean the concrete patio behind your home." },
-  { id: "roof", name: "Roof Clean", basePrice: 899, desc: "Soft wash your roof to remove black organic streaks." },
-  { id: "house", name: "House Wash", basePrice: 599, desc: "Get rid of dust, cobwebs, mold, and mildew on exterior walls." },
-  { id: "gutter", name: "Gutter Clean", basePrice: 249, desc: "Unclog your gutters and downspouts to prevent flooding." },
-  { id: "windows", name: "Window + Screen Clean", basePrice: 449, desc: "Remove dirt, dust, and fingerprints from exterior windows/screens." },
+  {
+    id: "pressure-driveway",
+    name: "Pressure Wash: Driveway",
+    basePrice: 249,
+    desc: "Clean your concrete driveway, front patio, walkway, and curb.",
+  },
+  {
+    id: "pressure-patio",
+    name: "Pressure Wash: Back Patio",
+    basePrice: 99,
+    desc: "Clean the concrete patio behind your home.",
+  },
+  {
+    id: "roof",
+    name: "Roof Clean",
+    basePrice: 899,
+    desc: "Soft wash your roof to remove black organic streaks.",
+  },
+  {
+    id: "house",
+    name: "House Wash",
+    basePrice: 599,
+    desc: "Get rid of dust, cobwebs, mold, and mildew on exterior walls.",
+  },
+  {
+    id: "gutter",
+    name: "Gutter Clean",
+    basePrice: 249,
+    desc: "Unclog your gutters and downspouts to prevent flooding.",
+  },
+  {
+    id: "windows",
+    name: "Window + Screen Clean",
+    basePrice: 449,
+    desc: "Remove dirt, dust, and fingerprints from exterior windows/screens.",
+  },
 ];
 
 // Duration (minutes) per service
@@ -70,7 +100,9 @@ function mapDurationToHours(mins: number) {
 function buildBookingUrl(hours: number, meta: Record<string, string>) {
   const base = CAL_URLS[hours] || CAL_URLS[8];
   const u = new URL(base);
-  Object.entries(meta).forEach(([k, v]) => u.searchParams.append(`metadata[${k}]`, v));
+  Object.entries(meta).forEach(([k, v]) =>
+    u.searchParams.append(`metadata[${k}]`, v)
+  );
   return u.toString();
 }
 
@@ -116,7 +148,10 @@ export function computeTotals(
     return { ...s, price };
   });
 
-  const chosen = adjustedServices.filter((s) => Boolean(selectedMap[s.id])) as PricedService[];
+  const chosen = adjustedServices.filter((s) =>
+    Boolean(selectedMap[s.id])
+  ) as PricedService[];
+
   const selectedCount = chosen.length;
   const effectiveCount = new Set(chosen.map((s) => discountCategoryFor(s.id))).size;
   const subtotal = chosen.reduce((sum, s) => sum + s.price, 0);
@@ -131,7 +166,10 @@ export function computeTotals(
   const afterDiscount = round2(subtotal - multiAmt);
 
   const MIN_TOTAL = 249;
-  const tripFee = afterDiscount < MIN_TOTAL && afterDiscount > 0 ? round2(MIN_TOTAL - afterDiscount) : 0;
+  const tripFee =
+    afterDiscount < MIN_TOTAL && afterDiscount > 0
+      ? round2(MIN_TOTAL - afterDiscount)
+      : 0;
 
   const total = Math.max(0, round2(afterDiscount + tripFee));
 
@@ -144,7 +182,7 @@ export function computeTotals(
 }
 
 /* =============================================================================
-   Component (Inline Upsell only — NO modal code)
+   Component (Inline Upsell only — NO modal/parent messaging)
 ============================================================================= */
 export default function InstantQuoteSchedule() {
   const [selected, setSelected] = useState<Record<string, boolean>>({});
@@ -161,18 +199,26 @@ export default function InstantQuoteSchedule() {
   // Validation after click
   const [attemptedSchedule, setAttemptedSchedule] = useState(false);
 
-  // Height reporting for parent page
+  // Height reporting for parent page (no ts-ignore)
   const sizerRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (typeof window === "undefined" || typeof document === "undefined") return;
-    let lastQuantized = 0, raf = 0;
+
+    let lastQuantized = 0;
+    let raf = 0;
     const STEP = 24;
 
     const measure = () => {
       const el = sizerRef.current;
       if (!el) {
-        const doc = document.documentElement, body = document.body;
-        return Math.max(doc.scrollHeight, body.scrollHeight, doc.offsetHeight, body.offsetHeight);
+        const doc = document.documentElement;
+        const body = document.body;
+        return Math.max(
+          doc.scrollHeight,
+          body.scrollHeight,
+          doc.offsetHeight,
+          body.offsetHeight
+        );
       }
       return el.offsetTop + el.offsetHeight;
     };
@@ -188,17 +234,25 @@ export default function InstantQuoteSchedule() {
     };
 
     postHeight();
+
     const ro = new ResizeObserver(() => {
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(postHeight);
     });
     ro.observe(document.documentElement);
     ro.observe(document.body);
-    // @ts-ignore
-    if (document.fonts?.ready) document.fonts.ready.then(() => postHeight());
+
+    type DocWithFonts = Document & { fonts?: { ready?: Promise<unknown> } };
+    const fontsReady = (document as DocWithFonts).fonts?.ready;
+    fontsReady?.then(postHeight);
+
     window.addEventListener("load", postHeight);
-    const onResize = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(postHeight); };
+    const onResize = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(postHeight);
+    };
     window.addEventListener("resize", onResize);
+
     return () => {
       cancelAnimationFrame(raf);
       ro.disconnect();
@@ -234,8 +288,10 @@ export default function InstantQuoteSchedule() {
 
   const summaryLines = useMemo(() => {
     const items = adjustedServices.filter((s) => selected[s.id]).map((s) => `${s.name} ($${s.price})`);
-    if (hasTwoStoryRelevant) items.push(`Two-story: ${twoStory === null ? "Select Yes/No" : twoStory ? "Yes" : "No"}`);
-    if (hasGutter) items.push(`Gutter Guards: ${gutterGuards === null ? "Select Yes/No" : gutterGuards ? "Yes" : "No"}`);
+    if (hasTwoStoryRelevant)
+      items.push(`Two-story: ${twoStory === null ? "Select Yes/No" : twoStory ? "Yes" : "No"}`);
+    if (hasGutter)
+      items.push(`Gutter Guards: ${gutterGuards === null ? "Select Yes/No" : gutterGuards ? "Yes" : "No"}`);
     return items.length ? items : ["No services selected"];
   }, [selected, adjustedServices, twoStory, hasTwoStoryRelevant, hasGutter, gutterGuards]);
 
@@ -284,7 +340,9 @@ export default function InstantQuoteSchedule() {
   return (
     <div className="max-w-6xl mx-auto px-2 sm:px-6 pt-0 bg-[#f2f3f8]">
       <header className="mt-0 mb-6 sm:mb-6 text-center">
-        <p className="text-muted-foreground mt-2">Select services to see your price. Book instantly.</p>
+        <p className="text-muted-foreground mt-2">
+          Select services to see your price. Book instantly.
+        </p>
       </header>
 
       {/* Layout */}
@@ -296,20 +354,31 @@ export default function InstantQuoteSchedule() {
             {adjustedServices.map((svc) => (
               <Card
                 key={svc.id}
-                className={cn("transition hover:shadow-lg cursor-pointer", selected[svc.id] && "ring-2 ring-[#2755f8]/60")}
-                onClick={() => setSelected((prev) => ({ ...prev, [svc.id]: !prev[svc.id] }))}
+                className={cn(
+                  "transition hover:shadow-lg cursor-pointer",
+                  selected[svc.id] && "ring-2 ring-[#2755f8]/60"
+                )}
+                onClick={() =>
+                  setSelected((prev) => ({ ...prev, [svc.id]: !prev[svc.id] }))
+                }
               >
                 <CardContent className="p-4 sm:p-6">
                   <div className="flex items-start gap-3">
                     <Checkbox
                       id={svc.id}
                       checked={!!selected[svc.id]}
-                      onCheckedChange={(v) => setSelected((prev) => ({ ...prev, [svc.id]: !!v }))}
+                      onCheckedChange={(v) =>
+                        setSelected((prev) => ({ ...prev, [svc.id]: !!v }))
+                      }
                       className="mt-1 pointer-events-none border-[#2755f8] data-[state=checked]:bg-[#2755f8] data-[state=checked]:text-white"
                     />
                     <div className="flex-1">
-                      <div className="font-medium text-lg leading-tight">{svc.name}</div>
-                      <div className="text-sm text-muted-foreground mt-1">{svc.desc}</div>
+                      <div className="font-medium text-lg leading-tight">
+                        {svc.name}
+                      </div>
+                      <div className="text-sm text-muted-foreground mt-1">
+                        {svc.desc}
+                      </div>
                     </div>
                     <div className="text-right">
                       <div className="text-xl font-semibold">${svc.price}</div>
@@ -438,7 +507,7 @@ export default function InstantQuoteSchedule() {
         {/* Right column: Summary */}
         <div className="sticky top-4 self-start z-30 md:col-span-1 h-fit">
           <Card>
-            <CardContent className="p-4 sm:p-6 space-y-4">
+            <CardContent className="p-4 sm:px-6 space-y-4">
               <h2 className="text-lg font-semibold">Summary</h2>
               <ul className="text-sm list-disc pl-5 space-y-1">
                 {summaryLines.map((line, i) => (
@@ -478,6 +547,7 @@ export default function InstantQuoteSchedule() {
                 onClick={() => {
                   setAttemptedSchedule(true);
                   if (!canSchedule) return;
+
                   if (!selected["house"]) {
                     setShowUpsell(true);
                     requestAnimationFrame(() => {
@@ -485,6 +555,7 @@ export default function InstantQuoteSchedule() {
                     });
                     return;
                   }
+
                   window.open(bookingUrl, "_blank", "noopener,noreferrer");
                 }}
               >
