@@ -154,7 +154,8 @@ export function computeTotals(
   );
 
   const selectedCount = chosen.length;
-  const effectiveCount = new Set(chosen.map((s) => discountCategoryFor(s.id))).size;
+  const effectiveCount = new Set(chosen.map((s) => discountCategoryFor(s.id)))
+    .size;
   const subtotal = chosen.reduce((sum, s) => sum + s.price, 0);
 
   let multiRate = 0;
@@ -211,7 +212,8 @@ export default function InstantQuoteSchedule() {
   // ---- Robust iframe auto-height: sentinel + quantization ----
   const sizerRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    if (typeof window === "undefined" || typeof document === "undefined") return;
+    if (typeof window === "undefined" || typeof document === "undefined")
+      return;
 
     let lastQuantized = 0;
     let raf = 0;
@@ -282,6 +284,24 @@ export default function InstantQuoteSchedule() {
     return () => {
       document.body.style.overflow = prev || "";
     };
+  }, [showTripwire]);
+
+  useEffect(() => {
+    if (!showTripwire) return;
+
+    // Ask parent page to center this iframe in the browser viewport
+    window.parent?.postMessage({ type: "quote-iframe-center" }, "*");
+
+    // Optional: re-post size once the modal is painted to avoid any off-by-one
+    requestAnimationFrame(() => {
+      window.parent?.postMessage(
+        {
+          type: "resize-quote-iframe",
+          height: document.documentElement.scrollHeight,
+        },
+        "*"
+      );
+    });
   }, [showTripwire]);
 
   const hasGutter = !!selected["gutter"];
@@ -645,7 +665,8 @@ export default function InstantQuoteSchedule() {
                 <p
                   className={cn(
                     "transition-colors",
-                    totals.effectiveCount === 2 && "font-semibold text-[#2755f8]"
+                    totals.effectiveCount === 2 &&
+                      "font-semibold text-[#2755f8]"
                   )}
                 >
                   2 services → 5% off
@@ -654,7 +675,8 @@ export default function InstantQuoteSchedule() {
                 <p
                   className={cn(
                     "transition-colors",
-                    totals.effectiveCount === 3 && "font-semibold text-[#2755f8]"
+                    totals.effectiveCount === 3 &&
+                      "font-semibold text-[#2755f8]"
                   )}
                 >
                   3 services → 10% off
@@ -663,7 +685,8 @@ export default function InstantQuoteSchedule() {
                 <p
                   className={cn(
                     "transition-colors",
-                    totals.effectiveCount === 4 && "font-semibold text-[#2755f8]"
+                    totals.effectiveCount === 4 &&
+                      "font-semibold text-[#2755f8]"
                   )}
                 >
                   4 services → 15% off
