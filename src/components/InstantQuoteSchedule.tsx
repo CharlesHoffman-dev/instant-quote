@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent } from "./ui/card";
 import { Button } from "./ui/button";
 import { Checkbox } from "./ui/checkbox";
@@ -70,16 +70,16 @@ export const DISCOUNT_BLURB =
 // Duration (minutes) per service
 const DURATIONS_MIN: Record<string, number> = {
   "pressure-driveway": 60,
-  "pressure-patio": 60, // 1 hour
-  windows: 180, // 3 hours
+  "pressure-patio": 60,
+  windows: 180,
   house: 120,
   roof: 120,
-  gutter: 120, // base for 1-story, adjust via helper
+  gutter: 120,
 };
 
 function gutterDuration(twoStory: boolean, guards: boolean) {
-  const base = twoStory ? 180 : 120; // 2-story = 3h, 1-story = 2h
-  return guards ? base * 2 : base; // doubled if guards
+  const base = twoStory ? 180 : 120;
+  return guards ? base * 2 : base;
 }
 
 // Cal.com mapping to 1–8 hr event types (anything >8 → 8)
@@ -115,18 +115,17 @@ function round2(n: number) {
 }
 
 export type Totals = {
-  selectedCount: number; // raw count (not used for discount)
-  effectiveCount: number; // discount count (pressure-* collapse to 1)
+  selectedCount: number;
+  effectiveCount: number;
   subtotal: number;
   multiRate: number;
   multiAmt: number;
-  tripFee: number; // ensures $249 minimum
+  tripFee: number;
   total: number;
-  durationMinutes: number; // total estimated duration
+  durationMinutes: number;
 };
 
 function discountCategoryFor(serviceId: string): string {
-  // Treat both pressure-* options as the same category for discount counting
   if (serviceId.startsWith("pressure-")) return "pressure";
   return serviceId;
 }
@@ -141,12 +140,12 @@ export function computeTotals(
   const adjustedServices: PricedService[] = services.map((s) => {
     let price = s.basePrice;
     if (twoStory) {
-      if (s.id === "gutter") price = s.basePrice * 2; // 2-story gutters cost double
+      if (s.id === "gutter") price = s.basePrice * 2;
       if (s.id === "house") price = s.basePrice + 100;
       if (s.id === "windows") price = s.basePrice + 100;
     }
-    if (gutterGuards && s.id === "gutter") price += 749; // surcharge if guards installed
-    if (promoHouseHalf && s.id === "house") price = Math.round(price * 0.5); // tripwire discount
+    if (gutterGuards && s.id === "gutter") price += 749;
+    if (promoHouseHalf && s.id === "house") price = Math.round(price * 0.5);
     return { ...s, price };
   });
 
@@ -155,14 +154,9 @@ export function computeTotals(
   );
 
   const selectedCount = chosen.length;
-
-  // Discount “effective” count: pressure-driveway + pressure-patio => 1
-  const effectiveCount = new Set(chosen.map((s) => discountCategoryFor(s.id)))
-    .size;
-
+  const effectiveCount = new Set(chosen.map((s) => discountCategoryFor(s.id))).size;
   const subtotal = chosen.reduce((sum, s) => sum + s.price, 0);
 
-  // Discount ladder based on effectiveCount: 2→5%, 3→10%, 4→15%, 5+→20%
   let multiRate = 0;
   if (effectiveCount >= 5) multiRate = 0.2;
   else if (effectiveCount === 4) multiRate = 0.15;
@@ -172,7 +166,6 @@ export function computeTotals(
   const multiAmt = round2(subtotal * multiRate);
   const afterDiscount = round2(subtotal - multiAmt);
 
-  // Trip fee brings total up to $249 minimum
   const MIN_TOTAL = 249;
   const tripFee =
     afterDiscount < MIN_TOTAL && afterDiscount > 0
@@ -181,7 +174,6 @@ export function computeTotals(
 
   const total = Math.max(0, round2(afterDiscount + tripFee));
 
-  // Duration sum
   const durationMinutes = chosen.reduce((mins, s) => {
     if (s.id === "gutter") return mins + gutterDuration(twoStory, gutterGuards);
     return mins + (DURATIONS_MIN[s.id] || 0);
@@ -216,27 +208,38 @@ export default function InstantQuoteSchedule() {
   // UX: show validation messages after trying to schedule
   const [attemptedSchedule, setAttemptedSchedule] = useState(false);
 
-  // Sticky/iframe auto-height: use ResizeObserver so parent resizes on any content change
+  // ---- Robust iframe auto-height: sentinel + quantization ----
+  const sizerRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    if (typeof window === "undefined" || typeof document === "undefined")
-      return;
+    if (typeof window === "undefined" || typeof document === "undefined") return;
 
-    let lastHeight = 0;
+    let lastQuantized = 0;
     let raf = 0;
+    const STEP = 24; // snap to 24px to avoid 1–5px jitter loops
 
-    const measure = () =>
-      Math.max(
-        document.documentElement.scrollHeight,
-        document.body.scrollHeight
-      );
+    const measure = () => {
+      const el = sizerRef.current;
+      if (!el) {
+        const doc = document.documentElement;
+        const body = document.body;
+        return Math.max(
+          doc.scrollHeight,
+          body.scrollHeight,
+          doc.offsetHeight,
+          body.offsetHeight
+        );
+      }
+      return el.offsetTop + el.offsetHeight;
+    };
 
     const postHeight = () => {
       const h = Math.ceil(measure());
       if (!Number.isFinite(h)) return;
-      if (Math.abs(h - lastHeight) > 5) {
-        lastHeight = h;
+      const quantized = Math.ceil(h / STEP) * STEP;
+      if (quantized !== lastQuantized) {
+        lastQuantized = quantized;
         window.parent?.postMessage(
-          { type: "resize-quote-iframe", height: h },
+          { type: "resize-quote-iframe", height: quantized },
           "*"
         );
       }
@@ -245,12 +248,18 @@ export default function InstantQuoteSchedule() {
     // Initial post
     postHeight();
 
+    // Observe layout changes
     const ro = new ResizeObserver(() => {
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(postHeight);
     });
     ro.observe(document.documentElement);
+    ro.observe(document.body);
 
+    // Fonts / images / window resizes
+    // @ts-ignore
+    if (document.fonts?.ready) document.fonts.ready.then(() => postHeight());
+    window.addEventListener("load", postHeight);
     const onResize = () => {
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(postHeight);
@@ -260,6 +269,7 @@ export default function InstantQuoteSchedule() {
     return () => {
       cancelAnimationFrame(raf);
       ro.disconnect();
+      window.removeEventListener("load", postHeight);
       window.removeEventListener("resize", onResize);
     };
   }, []);
@@ -515,7 +525,7 @@ export default function InstantQuoteSchedule() {
                   </div>
                 )}
 
-                {/* Gutter Guards (No / Yes, default unselected) */}
+                {/* Gutter Guards (No / Yes) */}
                 {hasGutter && (
                   <div className="mt-1">
                     <Label className="block mb-2 font-medium">
@@ -606,7 +616,7 @@ export default function InstantQuoteSchedule() {
                 disabled={!canSchedule}
                 onClick={() => {
                   setAttemptedSchedule(true);
-                  if (!canSchedule) return; // block until required answers provided
+                  if (!canSchedule) return;
                   if (!selected["house"]) {
                     setShowTripwire(true);
                     return;
@@ -635,8 +645,7 @@ export default function InstantQuoteSchedule() {
                 <p
                   className={cn(
                     "transition-colors",
-                    totals.effectiveCount === 2 &&
-                      "font-semibold text-[#2755f8]"
+                    totals.effectiveCount === 2 && "font-semibold text-[#2755f8]"
                   )}
                 >
                   2 services → 5% off
@@ -645,8 +654,7 @@ export default function InstantQuoteSchedule() {
                 <p
                   className={cn(
                     "transition-colors",
-                    totals.effectiveCount === 3 &&
-                      "font-semibold text-[#2755f8]"
+                    totals.effectiveCount === 3 && "font-semibold text-[#2755f8]"
                   )}
                 >
                   3 services → 10% off
@@ -655,8 +663,7 @@ export default function InstantQuoteSchedule() {
                 <p
                   className={cn(
                     "transition-colors",
-                    totals.effectiveCount === 4 &&
-                      "font-semibold text-[#2755f8]"
+                    totals.effectiveCount === 4 && "font-semibold text-[#2755f8]"
                   )}
                 >
                   4 services → 15% off
@@ -730,6 +737,9 @@ export default function InstantQuoteSchedule() {
           </div>
         </div>
       )}
+
+      {/* sentinel for robust height measurement */}
+      <div ref={sizerRef} style={{ height: 1 }} />
     </div>
   );
 }
