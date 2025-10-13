@@ -34,9 +34,6 @@ const SERVICES: Service[] = [
   { id: "windows", name: "Window + Screen Clean", basePrice: 449, desc: "Remove dirt, dust, and fingerprints from exterior windows/screens." },
 ];
 
-export const DISCOUNT_BLURB =
-  "Bundle & Save: 2 services 5% • 3 services 10% • 4 services 15% • 5+ services 20%";
-
 // Duration (minutes) per service
 const DURATIONS_MIN: Record<string, number> = {
   "pressure-driveway": 60,
@@ -144,26 +141,22 @@ export function computeTotals(
 }
 
 /* =============================================================================
-   Component (No tripwire, no upsell)
+   Component (No tripwire/upsell)
 ============================================================================= */
 export default function InstantQuoteSchedule() {
   const [selected, setSelected] = useState<Record<string, boolean>>({});
-
-  // REQUIRED fields: start as null (no default)
   const [twoStory, setTwoStory] = useState<boolean | null>(null);
   const [gutterGuards, setGutterGuards] = useState<boolean | null>(null);
-
-  // UX: show validation messages after trying to schedule
   const [attemptedSchedule, setAttemptedSchedule] = useState(false);
 
-  // ---- Robust iframe auto-height: sentinel + quantization ----
+  // Height reporting for parent page
   const sizerRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (typeof window === "undefined" || typeof document === "undefined") return;
 
     let lastQuantized = 0;
     let raf = 0;
-    const STEP = 24; // snap to 24px to reduce jitter
+    const STEP = 24;
 
     const measure = () => {
       const el = sizerRef.current;
@@ -185,7 +178,6 @@ export default function InstantQuoteSchedule() {
       }
     };
 
-    // Initial + observers
     postHeight();
     const ro = new ResizeObserver(() => {
       cancelAnimationFrame(raf);
@@ -194,7 +186,6 @@ export default function InstantQuoteSchedule() {
     ro.observe(document.documentElement);
     ro.observe(document.body);
 
-    // wait for web fonts without ts-ignore
     type DocWithFonts = Document & { fonts?: { ready?: Promise<unknown> } };
     (document as DocWithFonts).fonts?.ready?.then(() => postHeight());
 
@@ -281,24 +272,24 @@ export default function InstantQuoteSchedule() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto px-2 sm:px-6 pt-0 bg-[#f2f3f8]">
+    <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-0 bg-[#f2f3f8]">
       <header className="mt-0 mb-6 sm:mb-6 text-center">
         <p className="text-muted-foreground mt-2">
           Select services to see your price. Book instantly.
         </p>
       </header>
 
-      {/* Responsive two-column layout: 1-col on mobile, 2-col from md up */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
-        {/* Left: Services & Conditional Details */}
-        <div className="min-w-0 space-y-6 md:col-span-2">
-          {/* Services */}
+      {/* Desktop: 2 columns — services (fluid) + summary (fixed 360px) */}
+      <div className="grid gap-6 items-start md:grid-cols-[minmax(0,1fr)_360px]">
+        {/* Services + details (fluid column) */}
+        <div className="min-w-0 space-y-6">
+          {/* Services grid */}
           <section className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
             {adjustedServices.map((svc) => (
               <Card
                 key={svc.id}
                 className={cn(
-                  "transition hover:shadow-lg cursor-pointer",
+                  "transition hover:shadow-lg cursor-pointer h-full",
                   selected[svc.id] && "ring-2 ring-[#2755f8]/60"
                 )}
                 onClick={() =>
@@ -306,7 +297,7 @@ export default function InstantQuoteSchedule() {
                 }
               >
                 <CardContent className="p-4 sm:p-6">
-                  <div className="flex items-start gap-3">
+                  <div className="flex items-start gap-3 min-h-[120px]">
                     <Checkbox
                       id={svc.id}
                       checked={!!selected[svc.id]}
@@ -337,7 +328,7 @@ export default function InstantQuoteSchedule() {
             ))}
           </section>
 
-          {/* Details Card: ONLY shows when relevant yes/no exists */}
+          {/* Details Card (conditional) */}
           {(!!selected["windows"] || !!selected["house"] || !!selected["gutter"]) && (
             <Card>
               <CardContent className="p-4 sm:p-6 space-y-4">
@@ -409,8 +400,8 @@ export default function InstantQuoteSchedule() {
           )}
         </div>
 
-        {/* Right: Sticky Summary (desktop) */}
-        <div className="sticky top-4 self-start z-30 md:col-span-1 h-fit">
+        {/* Summary (fixed width on desktop) */}
+        <aside className="sticky top-4 self-start z-30 h-fit">
           <Card>
             <CardContent className="p-4 sm:p-6 space-y-4">
               <h2 className="text-lg font-semibold">Summary</h2>
@@ -463,15 +454,15 @@ export default function InstantQuoteSchedule() {
                 <p className="text-xs text-red-600">
                   {totals.total <= 0
                     ? "Select at least one service."
-                    : needsTwoStory && needsGutterGuards
+                    : hasTwoStoryRelevant && twoStory === null && hasGutter && gutterGuards === null
                     ? "Answer the two required questions."
-                    : needsTwoStory
+                    : hasTwoStoryRelevant && twoStory === null
                     ? "Please answer: Is your home two stories?"
                     : "Please answer: Do you have gutter guards installed?"}
                 </p>
               )}
 
-              {/* Bundle & Save (multiline, only tier highlight) */}
+              {/* Bundle & Save */}
               <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-center text-sm leading-relaxed text-blue-900 mb-0">
                 <p className="font-semibold text-black">Bundle & Save 💰</p>
                 <p className={cn("transition-colors", totals.effectiveCount === 2 && "font-semibold text-[#2755f8]")}>
@@ -489,7 +480,7 @@ export default function InstantQuoteSchedule() {
               </div>
             </CardContent>
           </Card>
-        </div>
+        </aside>
       </div>
 
       {/* sentinel for robust height measurement */}
