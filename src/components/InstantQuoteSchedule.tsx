@@ -218,30 +218,47 @@ export default function InstantQuoteSchedule() {
 
   // Sticky/iframe auto-height: use ResizeObserver so parent resizes on any content change
   useEffect(() => {
-    if (typeof window === "undefined" || typeof document === "undefined") return;
+    if (typeof window === "undefined" || typeof document === "undefined")
+      return;
 
-    const postHeight = () => {
-      const h = Math.max(
+    let lastHeight = 0;
+    let raf = 0;
+
+    const measure = () =>
+      Math.max(
         document.documentElement.scrollHeight,
         document.body.scrollHeight
       );
-      window.parent?.postMessage({ type: "resize-quote-iframe", height: h }, "*");
+
+    const postHeight = () => {
+      const h = Math.ceil(measure());
+      if (!Number.isFinite(h)) return;
+      if (Math.abs(h - lastHeight) > 5) {
+        lastHeight = h;
+        window.parent?.postMessage(
+          { type: "resize-quote-iframe", height: h },
+          "*"
+        );
+      }
     };
 
     // Initial post
     postHeight();
 
-    // Observe root size changes
     const ro = new ResizeObserver(() => {
-      requestAnimationFrame(postHeight);
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(postHeight);
     });
     ro.observe(document.documentElement);
 
-    // Fallback on window resize
-    const onResize = () => requestAnimationFrame(postHeight);
+    const onResize = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(postHeight);
+    };
     window.addEventListener("resize", onResize);
 
     return () => {
+      cancelAnimationFrame(raf);
       ro.disconnect();
       window.removeEventListener("resize", onResize);
     };
@@ -370,8 +387,7 @@ export default function InstantQuoteSchedule() {
   const needsTwoStory = hasTwoStoryRelevant && twoStory === null;
   const needsGutterGuards = hasGutter && gutterGuards === null;
 
-  const canSchedule =
-    totals.total > 0 && !needsTwoStory && !needsGutterGuards;
+  const canSchedule = totals.total > 0 && !needsTwoStory && !needsGutterGuards;
 
   const activeBtn =
     "bg-[#2755f8] text-white border-[#2755f8] hover:bg-[#1e45d1] hover:text-white cursor-pointer";
@@ -387,7 +403,7 @@ export default function InstantQuoteSchedule() {
   };
 
   return (
-    <div className="min-h-screen max-w-6xl mx-auto px-2 sm:px-6 pt-0 bg-[#f2f3f8]">
+    <div className="max-w-6xl mx-auto px-2 sm:px-6 pt-0 bg-[#f2f3f8]">
       <header className="mt-0 mb-6 sm:mb-6 text-center">
         <p className="text-muted-foreground mt-2">
           Select services to see your price. Book instantly.
