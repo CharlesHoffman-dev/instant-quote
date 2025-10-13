@@ -102,8 +102,7 @@ export function computeTotals(
   selectedMap: Record<string, boolean>,
   services: Service[],
   twoStory: boolean,
-  gutterGuards: boolean,
-  promoHouseHalf?: boolean
+  gutterGuards: boolean
 ): Totals {
   const adjustedServices: PricedService[] = services.map((s) => {
     let price = s.basePrice;
@@ -113,7 +112,6 @@ export function computeTotals(
       if (s.id === "windows") price = s.basePrice + 100;
     }
     if (gutterGuards && s.id === "gutter") price += 749;
-    if (promoHouseHalf && s.id === "house") price = Math.round(price * 0.5);
     return { ...s, price };
   });
 
@@ -146,7 +144,7 @@ export function computeTotals(
 }
 
 /* =============================================================================
-   Component (Inline Upsell inside Summary card)
+   Component (No tripwire, no upsell)
 ============================================================================= */
 export default function InstantQuoteSchedule() {
   const [selected, setSelected] = useState<Record<string, boolean>>({});
@@ -154,13 +152,6 @@ export default function InstantQuoteSchedule() {
   // REQUIRED fields: start as null (no default)
   const [twoStory, setTwoStory] = useState<boolean | null>(null);
   const [gutterGuards, setGutterGuards] = useState<boolean | null>(null);
-
-  // Inline upsell
-  const [showUpsell, setShowUpsell] = useState(false);
-  const upsellRef = useRef<HTMLDivElement | null>(null);
-
-  // Promo state
-  const [promoHouseHalf, setPromoHouseHalf] = useState(false);
 
   // UX: show validation messages after trying to schedule
   const [attemptedSchedule, setAttemptedSchedule] = useState(false);
@@ -227,8 +218,8 @@ export default function InstantQuoteSchedule() {
   const hasTwoStoryRelevant = !!(selected["windows"] || selected["house"] || selected["gutter"]);
 
   const totals = useMemo(
-    () => computeTotals(selected, SERVICES, twoStory ?? false, gutterGuards ?? false, promoHouseHalf),
-    [selected, twoStory, gutterGuards, promoHouseHalf]
+    () => computeTotals(selected, SERVICES, twoStory ?? false, gutterGuards ?? false),
+    [selected, twoStory, gutterGuards]
   );
 
   const adjustedServices = useMemo<PricedService[]>(() => {
@@ -240,10 +231,9 @@ export default function InstantQuoteSchedule() {
         if (s.id === "windows") price = s.basePrice + 100;
       }
       if ((gutterGuards ?? false) && s.id === "gutter") price += 749;
-      if (promoHouseHalf && s.id === "house") price = Math.round(price * 0.5);
       return { ...s, price };
     });
-  }, [twoStory, gutterGuards, promoHouseHalf]);
+  }, [twoStory, gutterGuards]);
 
   const summaryLines = useMemo(() => {
     const items = adjustedServices.filter((s) => selected[s.id]).map((s) => `${s.name} ($${s.price})`);
@@ -268,16 +258,9 @@ export default function InstantQuoteSchedule() {
       effectiveServiceCount: String(totals.effectiveCount),
       twoStory: hasTwoStoryRelevant ? (twoStory === null ? "Required" : twoStory ? "Yes" : "No") : "N/A",
       gutterGuards: hasGutter ? (gutterGuards === null ? "Required" : gutterGuards ? "Yes" : "No") : "N/A",
-      houseTripwire50: promoHouseHalf ? "Yes" : "No",
     } as Record<string, string>;
     return buildBookingUrl(hours, meta);
-  }, [hours, adjustedServices, selected, totals, twoStory, gutterGuards, hasTwoStoryRelevant, hasGutter, promoHouseHalf]);
-
-  // Latest booking url for click handlers that run after setState
-  const bookingUrlRef = useRef(bookingUrl);
-  useEffect(() => {
-    bookingUrlRef.current = bookingUrl;
-  }, [bookingUrl]);
+  }, [hours, adjustedServices, selected, totals, twoStory, gutterGuards, hasTwoStoryRelevant, hasGutter]);
 
   // Required-field gating for scheduling
   const needsTwoStory = hasTwoStoryRelevant && twoStory === null;
@@ -470,16 +453,6 @@ export default function InstantQuoteSchedule() {
                 onClick={() => {
                   setAttemptedSchedule(true);
                   if (!canSchedule) return;
-
-                  // If House Wash not selected, reveal inline upsell and focus it
-                  if (!selected["house"]) {
-                    setShowUpsell(true);
-                    requestAnimationFrame(() => {
-                      upsellRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-                    });
-                    return;
-                  }
-
                   window.open(bookingUrl, "_blank", "noopener,noreferrer");
                 }}
               >
@@ -496,43 +469,6 @@ export default function InstantQuoteSchedule() {
                     ? "Please answer: Is your home two stories?"
                     : "Please answer: Do you have gutter guards installed?"}
                 </p>
-              )}
-
-              {/* ✅ Inline Upsell inside the Summary card */}
-              {!selected["house"] && showUpsell && (
-                <div ref={upsellRef} className="mt-4 rounded-2xl border bg-white p-4 sm:p-5 shadow-sm">
-                  <h3 className="text-base sm:text-lg font-semibold text-center">
-                    Add a House Wash for <span className="text-[#2755f8]">50% Off</span>?
-                  </h3>
-                  <p className="mt-2 text-sm text-muted-foreground text-center">
-                    A gentle low-pressure wash that removes dust, cobwebs, mold, and mildew from exterior walls.
-                  </p>
-                  <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <Button
-                      type="button"
-                      className="h-11 rounded-xl bg-[#2755f8] hover:bg-[#1e45d1] text-white cursor-pointer"
-                      onClick={() => {
-                        setSelected((prev) => ({ ...prev, house: true }));
-                        setPromoHouseHalf(true);
-                        setShowUpsell(false);
-                        setTimeout(() => window.open(bookingUrlRef.current, "_blank", "noopener,noreferrer"), 0);
-                      }}
-                    >
-                      Add House Wash
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-11 rounded-xl"
-                      onClick={() => {
-                        setShowUpsell(false);
-                        window.open(bookingUrlRef.current, "_blank", "noopener,noreferrer");
-                      }}
-                    >
-                      No Thanks
-                    </Button>
-                  </div>
-                </div>
               )}
 
               {/* Bundle & Save (multiline, only tier highlight) */}
