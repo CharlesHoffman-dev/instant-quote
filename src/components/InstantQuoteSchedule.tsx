@@ -141,7 +141,7 @@ export function computeTotals(
 }
 
 /* =============================================================================
-   Component (stacked services, summary on right)
+   Component (stacked services, compact padding, sticky summary on desktop)
 ============================================================================= */
 export default function InstantQuoteSchedule() {
   const [selected, setSelected] = useState<Record<string, boolean>>({});
@@ -268,39 +268,40 @@ export default function InstantQuoteSchedule() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-0 bg-[#f2f3f8]">
-      <header className="mt-0 mb-6 sm:mb-6 text-center">
-        <p className="text-muted-foreground mt-2">Select services to see your price. Book instantly.</p>
+    <div className="max-w-7xl mx-auto px-3 sm:px-5 pt-0 bg-[#f2f3f8]">
+      <header className="mt-0 mb-3 sm:mb-4 text-center">
+        <p className="text-muted-foreground text-sm sm:text-base">Select services to see your price. Book instantly.</p>
       </header>
 
-      {/* Desktop: 2 columns — left (stacked services) + right (fixed summary) */}
-      <div className="grid gap-6 items-start md:grid-cols-[minmax(0,1fr)_360px]">
+      {/* Desktop: 2 columns — left (stacked services) + right (sticky summary) */}
+      <div className="grid gap-4 md:gap-6 items-start md:grid-cols-[minmax(0,1fr)_340px]">
         {/* Left column — stacked cards */}
-        <div className="min-w-0 flex flex-col gap-4 sm:gap-6">
+        <div className="min-w-0 flex flex-col gap-3 sm:gap-4">
           {adjustedServices.map((svc) => (
             <Card
               key={svc.id}
               className={cn(
-                "transition hover:shadow-lg cursor-pointer",
+                "transition hover:shadow-md cursor-pointer",
                 selected[svc.id] && "ring-2 ring-[#2755f8]/60"
               )}
               onClick={() => setSelected((prev) => ({ ...prev, [svc.id]: !prev[svc.id] }))}
             >
-              <CardContent className="p-4 sm:p-6">
+              {/* tighter padding */}
+              <CardContent className="p-3 sm:p-4">
                 <div className="flex items-start gap-3">
                   <Checkbox
                     id={svc.id}
                     checked={!!selected[svc.id]}
                     onCheckedChange={(v) => setSelected((prev) => ({ ...prev, [svc.id]: !!v }))}
-                    className="mt-1 pointer-events-none border-[#2755f8] data-[state=checked]:bg-[#2755f8] data-[state=checked]:text-white"
+                    className="mt-0.5 pointer-events-none border-[#2755f8] data-[state=checked]:bg-[#2755f8] data-[state=checked]:text-white"
                   />
                   <div className="flex-1">
-                    <div className="font-medium text-lg leading-tight">{svc.name}</div>
-                    <div className="text-sm text-muted-foreground mt-1">{svc.desc}</div>
+                    <div className="font-medium text-[15px] sm:text-base leading-tight">{svc.name}</div>
+                    <div className="text-xs sm:text-sm text-muted-foreground mt-1">{svc.desc}</div>
                   </div>
                   <div className="text-right">
-                    <div className="text-xl font-semibold">${svc.price}</div>
-                    <div className="text-[11px] text-muted-foreground mt-1">
+                    <div className="text-lg sm:text-xl font-semibold">${svc.price}</div>
+                    <div className="text-[10px] sm:text-[11px] text-muted-foreground mt-1">
                       {svc.id === "gutter"
                         ? `${fmtDuration(gutterDuration(twoStory ?? false, gutterGuards ?? false))}`
                         : `${fmtDuration(DURATIONS_MIN[svc.id])}`}
@@ -314,18 +315,18 @@ export default function InstantQuoteSchedule() {
           {/* Details Card (below the list) */}
           {(!!selected["windows"] || !!selected["house"] || !!selected["gutter"]) && (
             <Card>
-              <CardContent className="p-4 sm:p-6 space-y-4">
-                <h2 className="text-lg font-semibold">Your Home&#39;s Details</h2>
+              <CardContent className="p-3 sm:p-4 space-y-3">
+                <h2 className="text-base sm:text-lg font-semibold">Your Home&#39;s Details</h2>
 
                 {/* Two-Story */}
                 {(!!selected["windows"] || !!selected["house"] || !!selected["gutter"]) && (
-                  <div className="mt-1">
-                    <Label className="block mb-2 font-medium">Is your home two stories?</Label>
-                    <div className="flex gap-3">
+                  <div>
+                    <Label className="block mb-2 font-medium text-sm">Is your home two stories?</Label>
+                    <div className="flex gap-2">
                       <Button
                         type="button"
                         aria-pressed={twoStory === false}
-                        className={cn("h-10 px-4 rounded-xl border", twoStory === false ? activeBtn : inactiveBtn)}
+                        className={cn("h-9 px-3 rounded-xl border text-sm", twoStory === false ? activeBtn : inactiveBtn)}
                         onClick={() => setTwoStory(false)}
                       >
                         No
@@ -333,7 +334,7 @@ export default function InstantQuoteSchedule() {
                       <Button
                         type="button"
                         aria-pressed={twoStory === true}
-                        className={cn("h-10 px-4 rounded-xl border", twoStory === true ? activeBtn : inactiveBtn)}
+                        className={cn("h-9 px-3 rounded-xl border text-sm", twoStory === true ? activeBtn : inactiveBtn)}
                         onClick={() => setTwoStory(true)}
                       >
                         Yes
@@ -350,13 +351,13 @@ export default function InstantQuoteSchedule() {
 
                 {/* Gutter Guards */}
                 {!!selected["gutter"] && (
-                  <div className="mt-1">
-                    <Label className="block mb-2 font-medium">Do you have gutter guards installed?</Label>
-                    <div className="flex gap-3">
+                  <div>
+                    <Label className="block mb-2 font-medium text-sm">Do you have gutter guards installed?</Label>
+                    <div className="flex gap-2">
                       <Button
                         type="button"
                         aria-pressed={gutterGuards === false}
-                        className={cn("h-10 px-4 rounded-xl border", gutterGuards === false ? activeBtn : inactiveBtn)}
+                        className={cn("h-9 px-3 rounded-xl border text-sm", gutterGuards === false ? activeBtn : inactiveBtn)}
                         onClick={() => setGutterGuards(false)}
                       >
                         No
@@ -364,7 +365,7 @@ export default function InstantQuoteSchedule() {
                       <Button
                         type="button"
                         aria-pressed={gutterGuards === true}
-                        className={cn("h-10 px-4 rounded-xl border", gutterGuards === true ? activeBtn : inactiveBtn)}
+                        className={cn("h-9 px-3 rounded-xl border text-sm", gutterGuards === true ? activeBtn : inactiveBtn)}
                         onClick={() => setGutterGuards(true)}
                       >
                         Yes
@@ -383,17 +384,18 @@ export default function InstantQuoteSchedule() {
           )}
         </div>
 
-        {/* Right column — Summary */}
-        <aside className="sticky top-4 self-start z-30 h-fit">
+        {/* Right column — sticky summary on desktop */}
+        <aside className="md:sticky md:top-6 self-start z-30 h-fit">
           <Card>
-            <CardContent className="p-4 sm:p-6 space-y-4">
-              <h2 className="text-lg font-semibold">Summary</h2>
-              <ul className="text-sm list-disc pl-5 space-y-1">
+            {/* tighter padding */}
+            <CardContent className="p-3 sm:p-4 space-y-3">
+              <h2 className="text-base sm:text-lg font-semibold">Summary</h2>
+              <ul className="text-xs sm:text-sm list-disc pl-5 space-y-1">
                 {summaryLines.map((line, i) => (
                   <li key={i}>{line}</li>
                 ))}
               </ul>
-              <div className="border-t pt-3 space-y-1 text-sm">
+              <div className="border-t pt-3 space-y-1 text-xs sm:text-sm">
                 <div className="flex justify-between">
                   <span>Estimated time</span>
                   <span>{fmtDuration(totals.durationMinutes)}</span>
@@ -414,7 +416,7 @@ export default function InstantQuoteSchedule() {
                     <span>+ ${totals.tripFee.toFixed(2)}</span>
                   </div>
                 )}
-                <div className="flex justify-between font-semibold text-base">
+                <div className="flex justify-between font-semibold text-sm">
                   <span>Total</span>
                   <span>${totals.total.toFixed(2)}</span>
                 </div>
@@ -422,7 +424,7 @@ export default function InstantQuoteSchedule() {
 
               <Button
                 type="button"
-                className="w-full h-11 text-base bg-[#2755f8] hover:bg-[#1e45d1] text-white cursor-pointer"
+                className="w-full h-10 sm:h-11 text-sm sm:text-base bg-[#2755f8] hover:bg-[#1e45d1] text-white cursor-pointer"
                 disabled={!canSchedule}
                 onClick={() => {
                   setAttemptedSchedule(true);
@@ -446,7 +448,7 @@ export default function InstantQuoteSchedule() {
               )}
 
               {/* Bundle & Save */}
-              <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-center text-sm leading-relaxed text-blue-900 mb-0">
+              <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-center text-xs sm:text-sm leading-relaxed text-blue-900 mb-0">
                 <p className="font-semibold text-black">Bundle & Save 💰</p>
                 <p className={cn("transition-colors", totals.effectiveCount === 2 && "font-semibold text-[#2755f8]")}>
                   2 services → 5% off
