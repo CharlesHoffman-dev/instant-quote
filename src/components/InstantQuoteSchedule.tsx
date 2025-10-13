@@ -216,6 +216,37 @@ export default function InstantQuoteSchedule() {
   // UX: show validation messages after trying to schedule
   const [attemptedSchedule, setAttemptedSchedule] = useState(false);
 
+  // Sticky/iframe auto-height: use ResizeObserver so parent resizes on any content change
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+
+    const postHeight = () => {
+      const h = Math.max(
+        document.documentElement.scrollHeight,
+        document.body.scrollHeight
+      );
+      window.parent?.postMessage({ type: "resize-quote-iframe", height: h }, "*");
+    };
+
+    // Initial post
+    postHeight();
+
+    // Observe root size changes
+    const ro = new ResizeObserver(() => {
+      requestAnimationFrame(postHeight);
+    });
+    ro.observe(document.documentElement);
+
+    // Fallback on window resize
+    const onResize = () => requestAnimationFrame(postHeight);
+    window.addEventListener("resize", onResize);
+
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", onResize);
+    };
+  }, []);
+
   // 🔒 Lock body scroll when modal is open (prevents off-screen shift on mobile)
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -291,12 +322,12 @@ export default function InstantQuoteSchedule() {
   const bookingUrl = useMemo(() => {
     const chosen = adjustedServices.filter((s) => selected[s.id]);
 
-    // ✅ Clean, human-readable services list (e.g. "Roof Clean ($899.00), Gutter Clean ($498.00)")
+    // Clean, human-readable services list
     const servicesList =
       chosen.map((s) => `${s.name} ($${s.price.toFixed(2)})`).join(", ") ||
       "None";
 
-    // ✅ Include discount breakdown explicitly
+    // Include discount breakdown explicitly
     const meta = {
       services: servicesList,
       subtotal: totals.subtotal.toFixed(2),
@@ -355,36 +386,18 @@ export default function InstantQuoteSchedule() {
     return `${h > 0 ? `${h} hr${h > 1 ? "s" : ""} ` : ""}${m} min`;
   };
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    function postHeight() {
-      try {
-        const h =
-          document.documentElement.scrollHeight || document.body.scrollHeight;
-        window.parent?.postMessage(
-          { type: "resize-quote-iframe", height: h },
-          "*"
-        );
-      } catch {}
-    }
-    postHeight();
-    const handler = () => requestAnimationFrame(postHeight);
-    window.addEventListener("resize", handler);
-    return () => window.removeEventListener("resize", handler);
-  }, []);
-
   return (
-    <div className="max-w-6xl mx-auto px-2 sm:px-6 pt-0 bg-[#f2f3f8]">
+    <div className="min-h-screen max-w-6xl mx-auto px-2 sm:px-6 pt-0 bg-[#f2f3f8]">
       <header className="mt-0 mb-6 sm:mb-6 text-center">
         <p className="text-muted-foreground mt-2">
           Select services to see your price. Book instantly.
         </p>
       </header>
 
-      {/* Responsive two-column layout: 1-col on mobile, 2-col on desktop */}
-      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6 items-start">
+      {/* Responsive two-column layout: 1-col on mobile, 2-col from md up */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
         {/* Left: Services & Conditional Details */}
-        <div className="min-w-0 space-y-6">
+        <div className="min-w-0 space-y-6 md:col-span-2">
           {/* Services */}
           <section className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
             {adjustedServices.map((svc) => (
@@ -534,7 +547,7 @@ export default function InstantQuoteSchedule() {
         </div>
 
         {/* Right: Sticky Summary (desktop) */}
-        <div className="sticky top-4 self-start z-30 lg:col-start-2 h-fit">
+        <div className="sticky top-4 self-start z-30 md:col-span-1 h-fit">
           <Card>
             <CardContent className="p-4 sm:p-6 space-y-4">
               <h2 className="text-lg font-semibold">Summary</h2>
