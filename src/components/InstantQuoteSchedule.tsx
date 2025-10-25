@@ -475,9 +475,11 @@ export default function InstantQuoteSchedule() {
                       {svc.desc}
                     </div>
                   </div>
-                  <div className="ml-auto text-right shrink-0">
-                    <div className="text-[20px] font-bold">${svc.price}</div>
-                    <div className="text-muted-foreground mt-0.5">
+                  <div className="ml-auto text-right shrink-0 -mt-[0px]">
+                    <div className="text-[20px] font-bold leading-tight">
+                      ${svc.price}
+                    </div>
+                    <div className="text-muted-foreground mt-[2px] leading-snug relative top-[2px]">
                       {svc.id === "gutter"
                         ? `${fmtDuration(gutterDuration(false, false))}`
                         : `${fmtDuration(DURATIONS_MIN[svc.id])}`}
