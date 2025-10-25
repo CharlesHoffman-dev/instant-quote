@@ -219,7 +219,7 @@ export default function InstantQuoteSchedule() {
   };
 
   return (
-    <div className="max-w-[1280px] mx-auto px-3 sm:px-4 pt-0 bg-[#f2f3f8]">
+    <div className="max-w-[1280px] mx-auto px-[8px] sm:px-4 pt-0 bg-[#f2f3f8]">
       <header className="mt-0 mb-3 sm:mb-4 text-center">
         <p className="text-muted-foreground text-sm sm:text-base mb-[25px]">
           Select services to see your discounted price. Book instantly.
@@ -317,7 +317,7 @@ export default function InstantQuoteSchedule() {
                 disabled={!canSchedule}
                 onClick={() => {
                   if (!canSchedule) return;
-                  window.open(bookingUrl, "_blank", "noopener,noreferrer"); // <-- back to new tab
+                  window.open(bookingUrl, "_blank", "noopener,noreferrer"); // open in new tab
                 }}
               >
                 <Calendar className="w-4 h-4 mr-2" /> Schedule Now
