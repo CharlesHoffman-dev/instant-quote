@@ -428,7 +428,7 @@ export default function InstantQuoteSchedule() {
         {/* Right column — sticky summary at ≥ 992px; always full-height list */}
         <aside id="bp992-summary" className="self-start z-30 h-fit">
           <Card>
-            <CardContent className="py-2 sm:py-3 px-3 sm:px-4 space-y-2 mt-0">
+            <CardContent className="py-0.5 sm:py-1 px-3 sm:px-4 space-y-2 mt-0">
               <h2 className="text-[20px] font-bold">Summary</h2>
 
               <ul className="list-disc pl-5 space-y-1">
