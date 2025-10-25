@@ -131,12 +131,12 @@ export function computeTotals(
 }
 
 /* =============================================================================
-   Component (grid services, compact padding, sticky summary on desktop)
+   Component
 ============================================================================= */
 export default function InstantQuoteSchedule() {
   const [selected, setSelected] = useState<Record<string, boolean>>({});
 
-  // Height reporting for parent page
+  // Height reporting for parent page / iframe autosize
   const sizerRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (typeof window === "undefined" || typeof document === "undefined") return;
@@ -226,10 +226,10 @@ export default function InstantQuoteSchedule() {
         </p>
       </header>
 
-      {/* Use lg breakpoint so ≤991px stacks to one column */}
-      <div className="grid gap-4 md:gap-6 items-start lg:grid-cols-[minmax(0,_1fr)_340px]">
+      {/* Custom 992px breakpoint layout (via styled-jsx below) */}
+      <div id="bp992-layout" className="grid gap-4 md:gap-6 items-start">
         {/* Left column — grid of cards */}
-        <div className="min-w-0 grid grid-cols-1 lg:grid-cols-2 gap-1.5 sm:gap-2 items-stretch">
+        <div id="bp992-cards" className="min-w-0 grid grid-cols-1 gap-1.5 sm:gap-2 items-stretch">
           {adjustedServices.map((svc) => (
             <Card
               key={svc.id}
@@ -265,8 +265,8 @@ export default function InstantQuoteSchedule() {
           ))}
         </div>
 
-        {/* Right column — sticky summary on desktop; always full-height list */}
-        <aside className="lg:sticky lg:top-6 self-start z-30 h-fit">
+        {/* Right column — sticky summary at >= 992px; always full-height list */}
+        <aside id="bp992-summary" className="self-start z-30 h-fit">
           <Card>
             <CardContent className="py-2 sm:py-3 px-3 sm:px-4 space-y-2">
               <h2 className="text-base sm:text-lg font-semibold">Summary</h2>
@@ -276,10 +276,7 @@ export default function InstantQuoteSchedule() {
                 {adjustedServices.map((s) => {
                   const on = !!selected[s.id];
                   return (
-                    <li
-                      key={s.id}
-                      className={cn(!on && "text-muted-foreground line-through opacity-70")}
-                    >
+                    <li key={s.id} className={cn(!on && "text-muted-foreground line-through opacity-70")}>
                       {s.name} (${s.price})
                     </li>
                   );
@@ -297,31 +294,15 @@ export default function InstantQuoteSchedule() {
                 </div>
 
                 {/* Always render bundle discount; show 0% / $0.00 when none */}
-                <div
-                  className={cn(
-                    "flex justify-between",
-                    totals.multiRate > 0 ? "text-green-600" : "text-muted-foreground"
-                  )}
-                >
+                <div className={cn("flex justify-between", totals.multiRate > 0 ? "text-green-600" : "text-muted-foreground")}>
                   <span>Bundle discount ({Math.round(totals.multiRate * 100) || 0}%)</span>
-                  <span>
-                    {totals.multiRate > 0 ? "- " : ""}
-                    ${totals.multiAmt.toFixed(2)}
-                  </span>
+                  <span>{totals.multiRate > 0 ? "- " : ""}${totals.multiAmt.toFixed(2)}</span>
                 </div>
 
                 {/* Always render minimum-price row to avoid layout shift */}
-                <div
-                  className={cn(
-                    "flex justify-between",
-                    totals.tripFee > 0 ? "text-amber-600" : "text-muted-foreground"
-                  )}
-                >
+                <div className={cn("flex justify-between", totals.tripFee > 0 ? "text-amber-600" : "text-muted-foreground")}>
                   <span>Minimum price ($249)</span>
-                  <span>
-                    {totals.tripFee > 0 ? "+ " : ""}
-                    ${totals.tripFee.toFixed(2)}
-                  </span>
+                  <span>{totals.tripFee > 0 ? "+ " : ""}${totals.tripFee.toFixed(2)}</span>
                 </div>
 
                 <div className="flex justify-between font-semibold text-lg sm:text-xl">
@@ -342,7 +323,7 @@ export default function InstantQuoteSchedule() {
                 <Calendar className="w-4 h-4 mr-2" /> Schedule Now
               </Button>
 
-              {/* Updated status line */}
+              {/* Status line */}
               {!canSchedule ? (
                 <p className="text-xs text-red-600">Select at least one service.</p>
               ) : (
@@ -368,6 +349,28 @@ export default function InstantQuoteSchedule() {
           </Card>
         </aside>
       </div>
+
+      {/* Custom 992px breakpoint without editing tailwind.config.js */}
+      <style jsx>{`
+        @media (min-width: 992px) {
+          #bp992-layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 340px;
+            align-items: start;
+          }
+          #bp992-cards {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.5rem; /* matches your small gaps */
+          }
+          #bp992-summary {
+            position: sticky;
+            top: 1.5rem; /* ~top-6 */
+            height: fit-content;
+            z-index: 30;
+          }
+        }
+      `}</style>
 
       {/* sentinel for robust height measurement */}
       <div ref={sizerRef} style={{ height: 1 }} />
