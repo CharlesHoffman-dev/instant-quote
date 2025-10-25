@@ -24,6 +24,15 @@ export type Service = {
 };
 type PricedService = Service & { price: number };
 
+type Promo = {
+  code: string; // uppercase canonical
+  label: string; // human-readable for UI/metadata
+  apply: (args: {
+    selected: Record<string, boolean>;
+    subtotalAfterBundle: number;
+  }) => { applicable: boolean; amount: number; note?: string };
+};
+
 const SERVICES: Service[] = [
   { id: "pressure-driveway", name: "Pressure Wash: Driveway", basePrice: 249, desc: "Clean your concrete driveway, front patio, walkway, and curb." },
   { id: "pressure-patio", name: "Pressure Wash: Back Patio", basePrice: 99, desc: "Clean the concrete patio behind your home." },
@@ -84,6 +93,8 @@ export type Totals = {
   subtotal: number;
   multiRate: number;
   multiAmt: number;
+  promoCode: string | null;
+  promoAmt: number;
   tripFee: number;
   total: number;
   durationMinutes: number;
@@ -94,11 +105,32 @@ function discountCategoryFor(serviceId: string): string {
   return serviceId;
 }
 
+const PROMOS: Promo[] = [
+  // ROOF50 — $50 off when a roof cleaning is in the cart. Applied after bundle discount and before minimum price check.
+  {
+    code: "ROOF50",
+    label: "$50 off Roof Clean",
+    apply: ({ selected, subtotalAfterBundle }) => {
+      const hasRoof = !!selected["roof"];
+      if (!hasRoof) return { applicable: false, amount: 0, note: "Add Roof Clean to use ROOF50." };
+      const amount = Math.min(50, Math.max(0, subtotalAfterBundle));
+      return { applicable: true, amount };
+    },
+  },
+];
+
+function findPromo(code: string | null): Promo | null {
+  if (!code) return null;
+  const canonical = code.trim().toUpperCase();
+  return PROMOS.find((p) => p.code === canonical) || null;
+}
+
 export function computeTotals(
   selectedMap: Record<string, boolean>,
   services: Service[],
   _twoStory: boolean,
-  _gutterGuards: boolean
+  _gutterGuards: boolean,
+  promoCode: string | null
 ): Totals {
   const adjustedServices: PricedService[] = services.map((s) => ({ ...s, price: s.basePrice }));
 
@@ -108,6 +140,7 @@ export function computeTotals(
   const effectiveCount = new Set(chosen.map((s) => discountCategoryFor(s.id))).size;
   const subtotal = chosen.reduce((sum, s) => sum + s.price, 0);
 
+  // bundle discount
   let multiRate = 0;
   if (effectiveCount >= 5) multiRate = 0.2;
   else if (effectiveCount === 4) multiRate = 0.15;
@@ -115,19 +148,42 @@ export function computeTotals(
   else if (effectiveCount === 2) multiRate = 0.05;
 
   const multiAmt = round2(subtotal * multiRate);
-  const afterDiscount = round2(subtotal - multiAmt);
+  const afterBundle = round2(subtotal - multiAmt);
+
+  // promo (single code only)
+  let promoAmt = 0;
+  const promo = findPromo(promoCode);
+  if (promo) {
+    const res = promo.apply({ selected: selectedMap, subtotalAfterBundle: afterBundle });
+    if (res.applicable) {
+      promoAmt = round2(Math.min(afterBundle, res.amount));
+    }
+  }
+
+  const afterPromo = round2(afterBundle - promoAmt);
 
   const MIN_TOTAL = 249;
-  const tripFee = afterDiscount < MIN_TOTAL && afterDiscount > 0 ? round2(MIN_TOTAL - afterDiscount) : 0;
+  const tripFee = afterPromo < MIN_TOTAL && afterPromo > 0 ? round2(MIN_TOTAL - afterPromo) : 0;
 
-  const total = Math.max(0, round2(afterDiscount + tripFee));
+  const total = Math.max(0, round2(afterPromo + tripFee));
 
   const durationMinutes = chosen.reduce((mins, s) => {
     if (s.id === "gutter") return mins + gutterDuration(false, false);
     return mins + (DURATIONS_MIN[s.id] || 0);
   }, 0);
 
-  return { selectedCount, effectiveCount, subtotal, multiRate, multiAmt, tripFee, total, durationMinutes };
+  return {
+    selectedCount,
+    effectiveCount,
+    subtotal,
+    multiRate,
+    multiAmt,
+    promoCode: promo ? promo.code : null,
+    promoAmt,
+    tripFee,
+    total,
+    durationMinutes,
+  };
 }
 
 /* =============================================================================
@@ -135,6 +191,23 @@ export function computeTotals(
 ============================================================================= */
 export default function InstantQuoteSchedule() {
   const [selected, setSelected] = useState<Record<string, boolean>>({});
+  const [promoInput, setPromoInput] = useState("");
+  const [appliedPromo, setAppliedPromo] = useState<string | null>(null);
+  const [promoMsg, setPromoMsg] = useState<string | null>(null);
+
+  // Auto-apply ROOF50 and preselect Roof Clean for doorhanger UTM link
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const source = params.get("utm_source");
+    const medium = params.get("utm_medium");
+    const campaign = params.get("utm_campaign");
+    if (source === "doorhanger" && medium === "print" && campaign === "roof_cleaning") {
+      setAppliedPromo("ROOF50");
+      setPromoInput("ROOF50");
+      setSelected((prev) => ({ ...prev, roof: true })); // preselect Roof Clean
+    }
+  }, []);
 
   // Height reporting for parent page / iframe autosize
   const sizerRef = useRef<HTMLDivElement | null>(null);
@@ -188,19 +261,29 @@ export default function InstantQuoteSchedule() {
   }, []);
 
   /* ---------- Pricing + booking URL ---------- */
-  const totals = useMemo(() => computeTotals(selected, SERVICES, false, false), [selected]);
+  const totals = useMemo(
+    () => computeTotals(selected, SERVICES, false, false, appliedPromo),
+    [selected, appliedPromo]
+  );
 
-  const adjustedServices = useMemo<PricedService[]>(() => SERVICES.map((s) => ({ ...s, price: s.basePrice })), []);
+  const adjustedServices = useMemo<PricedService[]>(
+    () => SERVICES.map((s) => ({ ...s, price: s.basePrice })),
+    []
+  );
 
   const hours = mapDurationToHours(totals.durationMinutes);
   const bookingUrl = useMemo(() => {
     const chosen = adjustedServices.filter((s) => selected[s.id]);
-    const servicesList = chosen.map((s) => `${s.name} ($${s.price.toFixed(2)})`).join(", ") || "None";
+    const servicesList = chosen
+      .map((s) => `${s.name} ($${s.price.toFixed(2)})`)
+      .join(", ") || "None";
     const meta = {
       services: servicesList,
       subtotal: totals.subtotal.toFixed(2),
       discountRate: `${(totals.multiRate * 100).toFixed(0)}%`,
       discountAmount: totals.multiAmt.toFixed(2),
+      promoCode: totals.promoCode || "",
+      promoAmount: totals.promoAmt.toFixed(2),
       total: totals.total.toFixed(2),
       durationMinutes: String(totals.durationMinutes),
       effectiveServiceCount: String(totals.effectiveCount),
@@ -218,10 +301,48 @@ export default function InstantQuoteSchedule() {
     return `${h > 0 ? `${h} hr${h > 1 ? "s" : ""} ` : ""}${m} min`;
   };
 
+  // Promo handlers
+  const handleApplyPromo = () => {
+    const code = promoInput.trim().toUpperCase();
+    const promo = findPromo(code);
+    if (!promo) {
+      setPromoMsg("Invalid code.");
+      setAppliedPromo(null);
+      return;
+    }
+    // Preview applicability using current selection
+    const selectedServices = adjustedServices.filter((s) => selected[s.id]);
+    const categories = new Set(selectedServices.map((s) => discountCategoryFor(s.id))).size;
+    const tier =
+      categories >= 5 ? 0.2 :
+      categories === 4 ? 0.15 :
+      categories === 3 ? 0.1 :
+      categories === 2 ? 0.05 : 0;
+
+    const afterBundlePreview = round2(
+      selectedServices.reduce((sum, s) => sum + s.price, 0) * (1 - tier)
+    );
+
+    const res = promo.apply({ selected, subtotalAfterBundle: afterBundlePreview });
+    if (!res.applicable) {
+      setPromoMsg(res.note || "Code not applicable to current selection.");
+      setAppliedPromo(null);
+      return;
+    }
+    setAppliedPromo(promo.code); // single code at a time
+    setPromoMsg(null);
+  };
+
+  const handleRemovePromo = () => {
+    setAppliedPromo(null);
+    setPromoInput("");
+    setPromoMsg(null);
+  };
+
   return (
-    <div className="max-w-[1280px] mx-auto px-[8px] sm:px-4 pt-0 bg-[#f2f3f8]">
+    <div className="max-w-[1280px] mx-auto px-[8px] sm:px-4 pt-0 bg-[#f2f3f8] text-base">
       <header className="mt-0 mb-3 sm:mb-4 text-center">
-        <p className="text-muted-foreground text-sm sm:text-base mb-[25px]">
+        <p className="text-muted-foreground mb-[25px]">
           Select services to see your discounted price. Book instantly.
         </p>
       </header>
@@ -250,12 +371,12 @@ export default function InstantQuoteSchedule() {
                     className="mt-0.5 pointer-events-none border-[#2755f8] data-[state=checked]:bg-[#2755f8] data-[state=checked]:text-white"
                   />
                   <div className="flex-1 min-w-0">
-                    <div className="font-medium text-[14px] sm:text-base leading-tight">{svc.name}</div>
-                    <div className="text-[12px] sm:text-sm text-muted-foreground mt-0.5">{svc.desc}</div>
+                    <div className="font-medium text-[18px] leading-tight">{svc.name}</div>
+                    <div className="text-muted-foreground mt-0.5">{svc.desc}</div>
                   </div>
                   <div className="ml-auto text-right shrink-0">
-                    <div className="text-base sm:text-lg font-semibold">${svc.price}</div>
-                    <div className="text-[10px] sm:text-[11px] text-muted-foreground mt-0.5">
+                    <div className="text-lg font-semibold">${svc.price}</div>
+                    <div className="text-muted-foreground mt-0.5">
                       {svc.id === "gutter" ? `${fmtDuration(gutterDuration(false, false))}` : `${fmtDuration(DURATIONS_MIN[svc.id])}`}
                     </div>
                   </div>
@@ -269,10 +390,10 @@ export default function InstantQuoteSchedule() {
         <aside id="bp992-summary" className="self-start z-30 h-fit">
           <Card>
             <CardContent className="py-2 sm:py-3 px-3 sm:px-4 space-y-2">
-              <h2 className="text-base sm:text-lg font-semibold">Summary</h2>
+              <h2 className="text-lg font-semibold">Summary</h2>
 
               {/* Always render every service. Unselected appear greyed + crossed out. */}
-              <ul className="text-xs sm:text-sm list-disc pl-5 space-y-1">
+              <ul className="list-disc pl-5 space-y-1">
                 {adjustedServices.map((s) => {
                   const on = !!selected[s.id];
                   return (
@@ -283,7 +404,52 @@ export default function InstantQuoteSchedule() {
                 })}
               </ul>
 
-              <div className="border-t pt-2 space-y-1 text-sm sm:text-base">
+              {/* Promo code input */}
+              <div className="rounded-lg border border-blue-100 bg-blue-50 px-2 py-1.5 space-y-1.5">
+                <label htmlFor="promo" className="font-medium">Discount code</label>
+                <div className="flex gap-2">
+                  <input
+                    id="promo"
+                    type="text"
+                    inputMode="text"
+                    placeholder="Enter code"
+                    className="flex-1 rounded-md border px-2 py-2 outline-none focus:ring-2 focus:ring-[#2755f8] bg-white text-base"
+                    value={promoInput}
+                    onChange={(e) => setPromoInput(e.target.value)}
+                    disabled={!!appliedPromo}
+                  />
+                  {appliedPromo ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="h-10 cursor-pointer"
+                      onClick={handleRemovePromo}
+                    >
+                      Remove
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      className="h-10 bg-[#2755f8] hover:bg-[#1e45d1] text-white cursor-pointer"
+                      onClick={handleApplyPromo}
+                    >
+                      Apply
+                    </Button>
+                  )}
+                </div>
+                {/* Reserve space to prevent layout shift for messages */}
+                <div className="min-h-[20px]">
+                  {appliedPromo ? (
+                    <p className="text-green-600">Code {appliedPromo} applied.</p>
+                  ) : promoMsg ? (
+                    <p className="text-red-600">{promoMsg}</p>
+                  ) : (
+                    <p className="opacity-0">placeholder</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="border-t pt-2 space-y-1">
                 <div className="flex justify-between">
                   <span>Estimated time</span>
                   <span>{fmtDuration(totals.durationMinutes)}</span>
@@ -293,19 +459,43 @@ export default function InstantQuoteSchedule() {
                   <span>${totals.subtotal.toFixed(2)}</span>
                 </div>
 
-                {/* Always render bundle discount; show 0% / $0.00 when none */}
-                <div className={cn("flex justify-between", totals.multiRate > 0 ? "text-green-600" : "text-muted-foreground")}>
+                {/* Bundle discount row */}
+                <div
+                  className={cn(
+                    "flex justify-between",
+                    totals.multiRate > 0 ? "text-green-600" : "text-muted-foreground opacity-60"
+                  )}
+                >
                   <span>Bundle discount ({Math.round(totals.multiRate * 100) || 0}%)</span>
                   <span>{totals.multiRate > 0 ? "- " : ""}${totals.multiAmt.toFixed(2)}</span>
                 </div>
 
-                {/* Always render minimum-price row to avoid layout shift */}
-                <div className={cn("flex justify-between", totals.tripFee > 0 ? "text-amber-600" : "text-muted-foreground")}>
+                {/* Promo row */}
+                <div
+                  className={cn(
+                    "flex justify-between",
+                    totals.promoCode ? "text-green-600" : "text-muted-foreground opacity-60"
+                  )}
+                >
+                  <span>Promo {totals.promoCode ? `(${totals.promoCode})` : "(none)"}</span>
+                  <span>
+                    {totals.promoCode && totals.promoAmt > 0 ? "- " : ""}$
+                    {totals.promoCode ? totals.promoAmt.toFixed(2) : "0.00"}
+                  </span>
+                </div>
+
+                {/* Minimum price row */}
+                <div
+                  className={cn(
+                    "flex justify-between",
+                    totals.tripFee > 0 ? "text-amber-600" : "text-muted-foreground opacity-60"
+                  )}
+                >
                   <span>Minimum price ($249)</span>
                   <span>{totals.tripFee > 0 ? "+ " : ""}${totals.tripFee.toFixed(2)}</span>
                 </div>
 
-                <div className="flex justify-between font-semibold text-lg sm:text-xl">
+                <div className="flex justify-between font-semibold text-xl">
                   <span>Total</span>
                   <span>${totals.total.toFixed(2)}</span>
                 </div>
@@ -313,24 +503,24 @@ export default function InstantQuoteSchedule() {
 
               <Button
                 type="button"
-                className="w-full h-10 sm:h-11 text-sm sm:text-base bg-[#2755f8] hover:bg-[#1e45d1] text-white cursor-pointer"
+                className="w-full h-12 text-base bg-[#2755f8] hover:bg-[#1e45d1] text-white cursor-pointer"
                 disabled={!canSchedule}
                 onClick={() => {
                   if (!canSchedule) return;
-                  window.open(bookingUrl, "_blank", "noopener,noreferrer"); // open in new tab
+                  window.open(bookingUrl, "_blank", "noopener,noreferrer");
                 }}
               >
-                <Calendar className="w-4 h-4 mr-2" /> Schedule Now
+                <Calendar className="w-5 h-5 mr-2" /> Schedule Now
               </Button>
 
               {/* Status line */}
               {!canSchedule ? (
-                <p className="text-xs text-red-600">Select at least one service.</p>
+                <p className="text-red-600">Select at least one service.</p>
               ) : (
-                <p className="text-xs text-green-600">No deposit required to schedule.</p>
+                <p className="text-green-600">No deposit required to schedule.</p>
               )}
 
-              <div className="rounded-lg border border-blue-100 bg-blue-50 px-2 py-1.5 text-center text-xs sm:text-sm leading-relaxed text-blue-900 mb-0">
+              <div className="rounded-lg border border-blue-100 bg-blue-50 px-2 py-2 text-center leading-relaxed text-blue-900 mb-0">
                 <p className="font-semibold text-black">Bundle & Save 💰</p>
                 <p className={cn("transition-colors", totals.effectiveCount === 2 && "font-semibold text-[#2755f8]")}>
                   2 services → 5% off
