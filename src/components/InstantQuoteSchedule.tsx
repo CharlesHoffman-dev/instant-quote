@@ -67,9 +67,7 @@ function mapDurationToHours(mins: number) {
 function buildBookingUrl(hours: number, meta: Record<string, string>) {
   const base = CAL_URLS[hours] || CAL_URLS[8];
   const u = new URL(base);
-  Object.entries(meta).forEach(([k, v]) =>
-    u.searchParams.append(`metadata[${k}]`, v)
-  );
+  Object.entries(meta).forEach(([k, v]) => u.searchParams.append(`metadata[${k}]`, v));
   return u.toString();
 }
 
@@ -102,15 +100,9 @@ export function computeTotals(
   _twoStory: boolean,
   _gutterGuards: boolean
 ): Totals {
-  // Pricing is baseline only (single-story, no guards)
-  const adjustedServices: PricedService[] = services.map((s) => ({
-    ...s,
-    price: s.basePrice,
-  }));
+  const adjustedServices: PricedService[] = services.map((s) => ({ ...s, price: s.basePrice }));
 
-  const chosen = adjustedServices.filter((s) =>
-    Boolean(selectedMap[s.id])
-  ) as PricedService[];
+  const chosen = adjustedServices.filter((s) => Boolean(selectedMap[s.id])) as PricedService[];
 
   const selectedCount = chosen.length;
   const effectiveCount = new Set(chosen.map((s) => discountCategoryFor(s.id))).size;
@@ -130,7 +122,6 @@ export function computeTotals(
 
   const total = Math.max(0, round2(afterDiscount + tripFee));
 
-  // Durations baseline: single-story, no guards
   const durationMinutes = chosen.reduce((mins, s) => {
     if (s.id === "gutter") return mins + gutterDuration(false, false);
     return mins + (DURATIONS_MIN[s.id] || 0);
@@ -201,11 +192,6 @@ export default function InstantQuoteSchedule() {
 
   const adjustedServices = useMemo<PricedService[]>(() => SERVICES.map((s) => ({ ...s, price: s.basePrice })), []);
 
-  const summaryLines = useMemo(() => {
-    const items = adjustedServices.filter((s) => selected[s.id]).map((s) => `${s.name} ($${s.price})`);
-    return items.length ? items : ["No services selected"];
-  }, [selected, adjustedServices]);
-
   const hours = mapDurationToHours(totals.durationMinutes);
   const bookingUrl = useMemo(() => {
     const chosen = adjustedServices.filter((s) => selected[s.id]);
@@ -235,7 +221,7 @@ export default function InstantQuoteSchedule() {
   return (
     <div className="max-w-[1080px] mx-auto px-3 sm:px-4 pt-0 bg-[#f2f3f8]">
       <header className="mt-0 mb-3 sm:mb-4 text-center">
-        <p className="text-muted-foreground text-sm sm:text-base mb-[30px]">
+        <p className="text-muted-foreground text-sm sm:text-base mb-[25px]">
           Select services to see your discounted price. Book instantly.
         </p>
       </header>
@@ -254,7 +240,7 @@ export default function InstantQuoteSchedule() {
               )}
               onClick={() => setSelected((prev) => ({ ...prev, [svc.id]: !prev[svc.id] }))}
             >
-              {/* MUCH tighter interior (mobile) and keep price inline to reduce height */}
+              {/* tighter interior + inline price */}
               <CardContent className="py-1 sm:py-2 px-3 sm:px-4 h-full">
                 <div className="flex items-start gap-2.5 w-full">
                   <Checkbox
@@ -263,23 +249,14 @@ export default function InstantQuoteSchedule() {
                     onCheckedChange={(v) => setSelected((prev) => ({ ...prev, [svc.id]: !!v }))}
                     className="mt-0.5 pointer-events-none border-[#2755f8] data-[state=checked]:bg-[#2755f8] data-[state=checked]:text-white"
                   />
-
                   <div className="flex-1 min-w-0">
-                    <div className="font-medium text-[14px] sm:text-base leading-tight">
-                      {svc.name}
-                    </div>
-                    <div className="text-[12px] sm:text-sm text-muted-foreground mt-0.5">
-                      {svc.desc}
-                    </div>
+                    <div className="font-medium text-[14px] sm:text-base leading-tight">{svc.name}</div>
+                    <div className="text-[12px] sm:text-sm text-muted-foreground mt-0.5">{svc.desc}</div>
                   </div>
-
-                  {/* Price/time stays inline (no wrap) */}
                   <div className="ml-auto text-right shrink-0">
                     <div className="text-base sm:text-lg font-semibold">${svc.price}</div>
                     <div className="text-[10px] sm:text-[11px] text-muted-foreground mt-0.5">
-                      {svc.id === "gutter"
-                        ? `${fmtDuration(gutterDuration(false, false))}`
-                        : `${fmtDuration(DURATIONS_MIN[svc.id])}`}
+                      {svc.id === "gutter" ? `${fmtDuration(gutterDuration(false, false))}` : `${fmtDuration(DURATIONS_MIN[svc.id])}`}
                     </div>
                   </div>
                 </div>
@@ -288,16 +265,25 @@ export default function InstantQuoteSchedule() {
           ))}
         </div>
 
-        {/* Right column — sticky summary on desktop */}
+        {/* Right column — sticky summary on desktop; always full-height list */}
         <aside className="lg:sticky lg:top-6 self-start z-30 h-fit">
           <Card>
             <CardContent className="py-2 sm:py-3 px-3 sm:px-4 space-y-2">
               <h2 className="text-base sm:text-lg font-semibold">Summary</h2>
 
+              {/* Always render every service. Unselected appear greyed + crossed out. */}
               <ul className="text-xs sm:text-sm list-disc pl-5 space-y-1">
-                {summaryLines.map((line, i) => (
-                  <li key={i}>{line}</li>
-                ))}
+                {adjustedServices.map((s) => {
+                  const on = !!selected[s.id];
+                  return (
+                    <li
+                      key={s.id}
+                      className={cn(!on && "text-muted-foreground line-through opacity-70")}
+                    >
+                      {s.name} (${s.price})
+                    </li>
+                  );
+                })}
               </ul>
 
               <div className="border-t pt-2 space-y-1 text-sm sm:text-base">
@@ -309,18 +295,35 @@ export default function InstantQuoteSchedule() {
                   <span>Subtotal</span>
                   <span>${totals.subtotal.toFixed(2)}</span>
                 </div>
-                {totals.multiRate > 0 && (
-                  <div className="flex justify-between text-green-600">
-                    <span>Bundle discount ({Math.round(totals.multiRate * 100)}%)</span>
-                    <span>- ${totals.multiAmt.toFixed(2)}</span>
-                  </div>
-                )}
-                {totals.tripFee > 0 && (
-                  <div className="flex justify-between text-amber-600">
-                    <span>Trip Fee (min $249)</span>
-                    <span>+ ${totals.tripFee.toFixed(2)}</span>
-                  </div>
-                )}
+
+                {/* Always render bundle discount; show 0% / $0.00 when none */}
+                <div
+                  className={cn(
+                    "flex justify-between",
+                    totals.multiRate > 0 ? "text-green-600" : "text-muted-foreground"
+                  )}
+                >
+                  <span>Bundle discount ({Math.round(totals.multiRate * 100) || 0}%)</span>
+                  <span>
+                    {totals.multiRate > 0 ? "- " : ""}
+                    ${totals.multiAmt.toFixed(2)}
+                  </span>
+                </div>
+
+                {/* Always render minimum-price row to avoid layout shift */}
+                <div
+                  className={cn(
+                    "flex justify-between",
+                    totals.tripFee > 0 ? "text-amber-600" : "text-muted-foreground"
+                  )}
+                >
+                  <span>Minimum price ($249)</span>
+                  <span>
+                    {totals.tripFee > 0 ? "+ " : ""}
+                    ${totals.tripFee.toFixed(2)}
+                  </span>
+                </div>
+
                 <div className="flex justify-between font-semibold text-lg sm:text-xl">
                   <span>Total</span>
                   <span>${totals.total.toFixed(2)}</span>
@@ -339,8 +342,11 @@ export default function InstantQuoteSchedule() {
                 <Calendar className="w-4 h-4 mr-2" /> Schedule Now
               </Button>
 
-              {!canSchedule && (
+              {/* Updated status line */}
+              {!canSchedule ? (
                 <p className="text-xs text-red-600">Select at least one service.</p>
+              ) : (
+                <p className="text-xs text-green-600">No deposit required to schedule.</p>
               )}
 
               <div className="rounded-lg border border-blue-100 bg-blue-50 px-2 py-1.5 text-center text-xs sm:text-sm leading-relaxed text-blue-900 mb-0">
