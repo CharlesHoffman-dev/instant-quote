@@ -486,7 +486,7 @@ export default function InstantQuoteSchedule() {
                 </div>
               </div>
 
-              <div className="border-t pt-2 space-y-1">
+              <div className="pt-1 space-y-1">
                 <div className="flex justify-between">
                   <span>Estimated time</span>
                   <span>{fmtDuration(totals.durationMinutes)}</span>
