@@ -317,7 +317,7 @@ export default function InstantQuoteSchedule() {
                 disabled={!canSchedule}
                 onClick={() => {
                   if (!canSchedule) return;
-                  window.location.href = bookingUrl;
+                  window.open(bookingUrl, "_blank", "noopener,noreferrer"); // <-- back to new tab
                 }}
               >
                 <Calendar className="w-4 h-4 mr-2" /> Schedule Now
