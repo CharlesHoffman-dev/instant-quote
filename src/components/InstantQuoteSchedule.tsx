@@ -354,20 +354,20 @@ export default function InstantQuoteSchedule() {
       <style jsx>{`
         @media (min-width: 992px) {
           #bp992-layout {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) 340px;
-            align-items: start;
+            display: grid !important;
+            grid-template-columns: minmax(0, 1fr) 340px !important;
+            align-items: start !important;
           }
           #bp992-cards {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 0.5rem; /* matches your small gaps */
+            display: grid !important;
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            gap: 0.5rem !important; /* ~gap-2 */
           }
           #bp992-summary {
-            position: sticky;
-            top: 1.5rem; /* ~top-6 */
-            height: fit-content;
-            z-index: 30;
+            position: sticky !important;
+            top: 1.5rem !important; /* ~top-6 */
+            height: fit-content !important;
+            z-index: 30 !important;
           }
         }
       `}</style>
